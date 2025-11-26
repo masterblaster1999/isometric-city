@@ -46,7 +46,7 @@ const BUILDING_IMAGES: Partial<Record<BuildingType, { src: string; tileWidth: nu
   apartment_high: { src: '/assets/buildings/residential.png', tileWidth: 1, tileHeight: 1, verticalOffset: 18 },
   mansion: { src: '/assets/buildings/mansion.png', tileWidth: 1, tileHeight: 1, verticalOffset: 16 },
   // Commercial buildings (1x1)
-  shop_small: { src: '/assets/buildings/shop_small.png', tileWidth: 1, tileHeight: 1 },
+  shop_small: { src: '/assets/buildings/shop_small.png', tileWidth: 1, tileHeight: 1, scale: 0.7 },
   shop_medium: { src: '/assets/buildings/shop_medium.png', tileWidth: 1, tileHeight: 1 },
   office_low: { src: '/assets/buildings/commercial.png', tileWidth: 1, tileHeight: 1 },
   office_high: { src: '/assets/buildings/commercial.png', tileWidth: 1, tileHeight: 1 },
@@ -60,7 +60,7 @@ const BUILDING_IMAGES: Partial<Record<BuildingType, { src: string; tileWidth: nu
   fire_station: { src: '/assets/buildings/fire_station.png', tileWidth: 1, tileHeight: 1 },
   hospital: { src: '/assets/buildings/hospital.png', tileWidth: 1, tileHeight: 1, scale: 0.56, verticalOffset: 15 },
   park: { src: '/assets/buildings/park.png', tileWidth: 1, tileHeight: 1 },
-  tennis: { src: '/assets/buildings/tennis.png', tileWidth: 1, tileHeight: 1 },
+  tennis: { src: '/assets/buildings/tennis.png', tileWidth: 1, tileHeight: 1, scale: 0.95 },
   police_station: { src: '/assets/buildings/police_station.png', tileWidth: 1, tileHeight: 1 },
   school: { src: '/assets/buildings/school.png', tileWidth: 2, tileHeight: 2 },
   university: { src: '/assets/buildings/university.png', tileWidth: 3, tileHeight: 2 },

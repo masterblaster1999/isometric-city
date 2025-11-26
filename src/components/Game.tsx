@@ -50,6 +50,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 const TILE_WIDTH = 64;
 const HEIGHT_RATIO = 0.65;
 const TILE_HEIGHT = TILE_WIDTH * HEIGHT_RATIO;
+const KEY_PAN_SPEED = 520; // Pixels per second for keyboard panning
 
 type CarDirection = 'north' | 'east' | 'south' | 'west';
 
@@ -921,7 +922,8 @@ function SettingsPanel() {
           <div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">Controls</div>
             <div className="space-y-1 text-xs text-muted-foreground">
-              <div className="flex justify-between"><span>Pan</span><span className="text-foreground">Alt + Drag / Middle Click</span></div>
+              <div className="flex justify-between"><span>Pan (mouse)</span><span className="text-foreground">Alt + Drag / Middle Click</span></div>
+              <div className="flex justify-between"><span>Pan (keys)</span><span className="text-foreground">W / A / S / D</span></div>
               <div className="flex justify-between"><span>Zoom</span><span className="text-foreground">Scroll Wheel</span></div>
               <div className="flex justify-between"><span>Place Multiple</span><span className="text-foreground">Click + Drag</span></div>
               <div className="flex justify-between"><span>View Tile Info</span><span className="text-foreground">Select Tool + Click</span></div>
@@ -1125,6 +1127,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
   const [dragStartTile, setDragStartTile] = useState<{ x: number; y: number } | null>(null);
   const [dragEndTile, setDragEndTile] = useState<{ x: number; y: number } | null>(null);
+  const keysPressedRef = useRef<Set<string>>(new Set());
 
   // Only zoning tools show the grid/rectangle selection visualization
   const showsDragGrid = ['zone_residential', 'zone_commercial', 'zone_industrial', 'zone_dezone'].includes(selectedTool);
@@ -1148,6 +1151,64 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
   useEffect(() => {
     worldStateRef.current.speed = speed;
   }, [speed]);
+
+  // Keyboard panning (WASD / arrow keys)
+  useEffect(() => {
+    const pressed = keysPressedRef.current;
+    const isTypingTarget = (target: EventTarget | null) => {
+      const el = target as HTMLElement | null;
+      return !!el?.closest('input, textarea, select, [contenteditable="true"]');
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
+      const key = e.key.toLowerCase();
+      if (['w', 'a', 's', 'd', 'arrowup', 'arrowleft', 'arrowdown', 'arrowright'].includes(key)) {
+        pressed.add(key);
+        e.preventDefault();
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      pressed.delete(key);
+    };
+
+    let animationFrameId = 0;
+    let lastTime = performance.now();
+
+    const tick = (time: number) => {
+      animationFrameId = requestAnimationFrame(tick);
+      const delta = Math.min((time - lastTime) / 1000, 0.05);
+      lastTime = time;
+      if (!pressed.size) return;
+
+      let dx = 0;
+      let dy = 0;
+      if (pressed.has('w') || pressed.has('arrowup')) dy -= KEY_PAN_SPEED * delta;
+      if (pressed.has('s') || pressed.has('arrowdown')) dy += KEY_PAN_SPEED * delta;
+      if (pressed.has('a') || pressed.has('arrowleft')) dx -= KEY_PAN_SPEED * delta;
+      if (pressed.has('d') || pressed.has('arrowright')) dx += KEY_PAN_SPEED * delta;
+
+      if (dx !== 0 || dy !== 0) {
+        setOffset(prev => ({
+          x: prev.x + dx,
+          y: prev.y + dy,
+        }));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    animationFrameId = requestAnimationFrame(tick);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      cancelAnimationFrame(animationFrameId);
+      pressed.clear();
+    };
+  }, []);
 
   const spawnRandomCar = useCallback(() => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
@@ -1977,6 +2038,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       imageSrc = BUILDING_IMAGES.shop_medium;
     } else if (buildingType === 'shop_small') {
       imageSrc = BUILDING_IMAGES.shop_small;
+      sizeMultiplier = 1.26; // Scaled down 30% from 1.8
     } else if (['office_low', 'office_high', 'mall'].includes(buildingType)) {
       imageSrc = BUILDING_IMAGES.commercial;
     } else if (buildingType === 'warehouse') {
@@ -1996,7 +2058,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       else if (buildingType === 'police_station') sizeMultiplier = 1.35; // Scaled down 25% from 1.8
       else if (buildingType === 'park') sizeMultiplier = 1.134; // Scaled down 40% total (30% + 10%) from 1.8
       else if (buildingType === 'park_medium') sizeMultiplier = 1.45; // Slightly larger for 2x2 medium park
-      else if (buildingType === 'tennis') sizeMultiplier = 1.26; // Similar to house_medium
+      else if (buildingType === 'tennis') sizeMultiplier = 1.197; // Scaled down 5% from 1.26
     }
     
     if (imageSrc && imageCache.has(imageSrc)) {
@@ -2352,7 +2414,7 @@ export default function Game() {
         {state.activePanel === 'settings' && <SettingsPanel />}
         
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-muted-foreground text-xs pointer-events-none">
-          Alt+Drag or Middle-click to pan • Scroll to zoom • Drag zones to create areas • Auto-saves to browser
+          WASD to pan • Alt+Drag or Middle-click to pan • Scroll to zoom • Drag zones to create areas • Auto-saves to browser
         </div>
       </div>
     </TooltipProvider>
