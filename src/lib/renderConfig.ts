@@ -44,6 +44,9 @@ export interface SpritePack {
   // Per-sprite vertical offset adjustments for ABANDONED sprites only
   // These override verticalOffsets when rendering abandoned buildings
   abandonedVerticalOffsets?: Record<string, number>;
+  // Per-building-type scale adjustments for ABANDONED sprites only
+  // Values are multiplied with the normal scale (e.g., 0.7 = 70% of normal size)
+  abandonedScales?: Record<string, number>;
   // Maps building types to sprite keys in spriteOrder
   buildingToSprite: Record<string, string>;
   // Optional global scale multiplier for all sprites in this pack
@@ -311,6 +314,10 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     // Abandoned apartments need to shift down ~0.75 tiles from normal position
     apartment_low: -0.25, // Normal is -1.0, abandoned shifts down 0.75: -1.0 + 0.75 = -0.25
     apartment_high: 0.15, // Normal is -0.60, abandoned shifts down 0.75: -0.60 + 0.75 = 0.15
+  },
+  abandonedScales: {
+    // Abandoned factory_large needs to be scaled down 30%
+    factory_large: 0.7,
   },
   buildingToSprite: {
     house_small: 'house_small',
