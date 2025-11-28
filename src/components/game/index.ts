@@ -8,6 +8,8 @@ export * from './placeholders';
 export * from './imageLoader';
 export * from './gridFinders';
 export * from './renderHelpers';
+export * from './drawAircraft';
+export * from './drawPedestrians';
 export { Sidebar } from './Sidebar';
 export { OverlayModeToggle } from './OverlayModeToggle';
 export { MiniMap } from './MiniMap';
