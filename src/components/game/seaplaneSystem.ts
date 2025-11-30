@@ -227,16 +227,27 @@ export function useSeaplaneSystem(
             // Keep current targetAngle to maintain stability - don't chase the center
           }
           
+          // Check if we're approaching the water boundary (look ahead)
+          const lookAheadDist = seaplane.speed * 0.5; // Look ahead half a second
+          const lookAheadX = seaplane.x + Math.cos(seaplane.angle) * lookAheadDist;
+          const lookAheadY = seaplane.y + Math.sin(seaplane.angle) * lookAheadDist;
+          const approachingBoundary = !isOverWaterCallback(lookAheadX, lookAheadY);
+          
+          // If approaching boundary, immediately target bay center
+          if (approachingBoundary) {
+            seaplane.targetAngle = normalizedAngleToCenter;
+          }
+          
           // Smooth turning with maximum rate limit to prevent rapid flipping
           let angleDiff = seaplane.targetAngle - seaplane.angle;
           while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
           while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
           
-          // Limit maximum angle change per frame to prevent rapid flipping
-          // Reduced from 1.5 to 1.0 for smoother, slower turning
-          const maxAngleChange = Math.PI * delta * 1.0; // Max ~180 degrees per second
+          // Turn faster when approaching boundary, otherwise smooth turning
+          const baseTurnRate = approachingBoundary ? 3.0 : 1.5; // Faster turn near boundary
+          const maxAngleChange = Math.PI * delta * baseTurnRate;
           const clampedAngleDiff = Math.max(-maxAngleChange, Math.min(maxAngleChange, angleDiff));
-          seaplane.angle += clampedAngleDiff * Math.min(1, delta * 2);
+          seaplane.angle += clampedAngleDiff;
           
           // Normalize angle after update
           seaplane.angle = seaplane.angle % (Math.PI * 2);
@@ -246,10 +257,10 @@ export function useSeaplaneSystem(
           nextX = seaplane.x + Math.cos(seaplane.angle) * seaplane.speed * delta * speedMultiplier;
           nextY = seaplane.y + Math.sin(seaplane.angle) * seaplane.speed * delta * speedMultiplier;
           
-          // Check if next position is over water
+          // Final boundary check - don't actually leave water
           if (!isOverWaterCallback(nextX, nextY)) {
-            // Turn toward bay center if about to leave water
-            seaplane.targetAngle = angleToBayCenter;
+            // Stop and turn toward bay center
+            seaplane.targetAngle = normalizedAngleToCenter;
             nextX = seaplane.x;
             nextY = seaplane.y;
           }
