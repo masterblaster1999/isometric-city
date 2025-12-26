@@ -160,7 +160,7 @@ export function SettingsPanel() {
                   >
                     <div className="w-10 h-10 rounded overflow-hidden bg-muted flex-shrink-0 relative">
                       <Image 
-                        src={pack.src} 
+                        src={pack.previewSrc ?? pack.src} 
                         alt={pack.name}
                         fill
                         className="object-cover object-top"
@@ -170,7 +170,7 @@ export function SettingsPanel() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm truncate">{pack.name}</div>
-                      <div className="text-xs text-muted-foreground truncate">{pack.src}</div>
+                      <div className="text-xs text-muted-foreground truncate">{pack.procedural ? 'Procedural (generated)' : pack.src}</div>
                     </div>
                     {currentSpritePack.id === pack.id && (
                       <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />

@@ -5,13 +5,28 @@
 // Each sprite pack contains all the configuration needed for a specific
 // sprite sheet image, including layout, offsets, and building mappings.
 // ============================================================================
+export interface ProceduralSpritePackConfig {
+  // Width of a single sprite cell (in pixels) in the generated sheet
+  tileWidth: number;
+  // Height of a single sprite cell (in pixels) in the generated sheet
+  tileHeight: number;
+  // Optional seed for deterministic generation
+  seed?: number;
+}
+
 export interface SpritePack {
   // Unique identifier for this sprite pack
   id: string;
   // Display name for the UI
   name: string;
-  // Path to the sprite sheet image
+  // Optional preview image for UI (falls back to `src`).
+  // Useful for procedural packs where `src` is not a real URL.
+  previewSrc?: string;
+  // Path (or cache-key) to the sprite sheet image
   src: string;
+  // If present, this sprite pack uses procedurally generated sprite sheets instead
+  // of file-based PNG/WEBP assets.
+  procedural?: ProceduralSpritePackConfig;
   // Path to the construction sprite sheet (same layout, but buildings under construction)
   constructionSrc?: string;
   // Path to the abandoned sprite sheet (same layout, but buildings shown as abandoned/derelict)
@@ -579,6 +594,127 @@ const SPRITE_PACK_SPRITES4_CHINA: SpritePack = {
   // denseSrc: '/assets/sprites_red_water_new_china_dense.png',
 };
 
+
+// ============================================================================
+// SPRITE PACK: PROCEDURAL (Prototype)
+// ============================================================================
+// A runtime-generated sprite pack. The `src` fields are treated as cache-keys,
+// not as URLs. See `src/lib/proceduralSpriteSheets.ts` for the generator.
+const PROCEDURAL_PREVIEW_SVG = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+    <rect width="200" height="200" fill="#0b1220"/>
+    <polygon points="100,30 160,70 100,110 40,70" fill="#60a5fa"/>
+    <polygon points="40,70 100,110 100,170 40,130" fill="#3b82f6"/>
+    <polygon points="160,70 100,110 100,170 160,130" fill="#2563eb"/>
+    <text x="100" y="190" font-size="22" fill="#e2e8f0" text-anchor="middle" font-family="Arial">PROC</text>
+  </svg>`
+)}`;
+
+const SPRITE_PACK_PROCEDURAL_BASIC: SpritePack = {
+  ...SPRITE_PACK_SPRITES4,
+
+  id: 'procedural-basic',
+  name: 'Procedural (Prototype)',
+  previewSrc: PROCEDURAL_PREVIEW_SVG,
+
+  // Cache-key style sources (NOT URLs)
+  src: 'procedural:procedural-basic:main',
+  constructionSrc: 'procedural:procedural-basic:construction',
+  abandonedSrc: 'procedural:procedural-basic:abandoned',
+
+  // Disable file-backed variants (dense/parks/shops/etc.) for the prototype
+  denseSrc: undefined,
+  denseVariants: undefined,
+  modernSrc: undefined,
+  modernVariants: undefined,
+  parksSrc: undefined,
+  parksConstructionSrc: undefined,
+  parksBuildings: undefined,
+  farmsSrc: undefined,
+  farmsVariants: undefined,
+  shopsSrc: undefined,
+  shopsVariants: undefined,
+  stationsSrc: undefined,
+  stationsVariants: undefined,
+
+  // Neutral offsets (procedural art is generated with its own padding)
+  verticalOffsets: {},
+  horizontalOffsets: {},
+
+  buildingVerticalOffsets: {},
+  constructionVerticalOffsets: {},
+  constructionScales: {},
+  abandonedVerticalOffsets: {},
+  abandonedScales: {},
+
+  denseVerticalOffsets: {},
+  denseScales: {},
+  modernVerticalOffsets: {},
+  modernScales: {},
+
+  parksVerticalOffsets: {},
+  parksHorizontalOffsets: {},
+  parksScales: {},
+  parksConstructionVerticalOffsets: {},
+
+  farmsVerticalOffsets: {},
+  farmsHorizontalOffsets: {},
+  farmsScales: {},
+
+  shopsVerticalOffsets: {},
+  shopsHorizontalOffsets: {},
+  shopsScales: {},
+
+  stationsVerticalOffsets: {},
+  stationsHorizontalOffsets: {},
+  stationsScales: {},
+
+  procedural: {
+    tileWidth: 256,
+    tileHeight: 213,
+    seed: 1337,
+  },
+
+  // Map all building types into the existing sprite keys in `spriteOrder`.
+  // For parks-sheet-only buildings we map to generic park/civic sprites for now.
+  buildingToSprite: {
+    ...SPRITE_PACK_SPRITES4.buildingToSprite,
+
+    // Stations
+    rail_station: 'subway_station',
+
+    // Parks sheet-only buildings (fallback mapping)
+    basketball_courts: 'park',
+    playground_small: 'park',
+    playground_large: 'park_large',
+    baseball_field_small: 'park_large',
+    soccer_field_small: 'park_large',
+    football_field: 'park_large',
+    baseball_stadium: 'stadium',
+    community_center: 'museum',
+    office_building_small: 'commercial',
+    swimming_pool: 'park',
+    skate_park: 'park',
+    mini_golf_course: 'park_large',
+    bleachers_field: 'park_large',
+    go_kart_track: 'amusement_park',
+    amphitheater: 'museum',
+    greenhouse_garden: 'park',
+    animal_pens_farm: 'industrial',
+    cabin_house: 'house_medium',
+    campground: 'park_large',
+    marina_docks_small: 'commercial',
+    pier_large: 'commercial',
+    roller_coaster_small: 'amusement_park',
+    community_garden: 'park',
+    pond_park: 'park',
+    park_gate: 'city_hall',
+    mountain_lodge: 'mansion',
+    mountain_trailhead: 'park',
+  },
+};
+
+
 // ============================================================================
 // SPRITE PACKS REGISTRY
 // ============================================================================
@@ -587,6 +723,7 @@ const SPRITE_PACK_SPRITES4_CHINA: SpritePack = {
 // ============================================================================
 export const SPRITE_PACKS: SpritePack[] = [
   SPRITE_PACK_SPRITES4,
+  SPRITE_PACK_PROCEDURAL_BASIC,
   SPRITE_PACK_SPRITES4_HARRY,
   SPRITE_PACK_SPRITES4_CHINA,
 ];

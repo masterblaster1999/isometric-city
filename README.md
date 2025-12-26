@@ -51,6 +51,18 @@ IsoCity is a open-source isometric city-building simulation game built with **Ne
 4.  **Open the game:**
     Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
+
+## Procedural Sprite Packs (Experimental)
+
+This project now includes an **experimental procedural sprite pack** that generates building sprites at runtime using the Canvas 2D API (no `.webp` / `.png` sprite sheet required for the pack).
+
+- **Generator**: `src/lib/proceduralSpriteSheets.ts`
+- **Pack config**: `SPRITE_PACK_PROCEDURAL_BASIC` in `src/lib/renderConfig.ts`
+- **Loading / registration**: `src/components/game/spriteSheetProvider.ts`
+
+To create your own procedural pack, copy `SPRITE_PACK_PROCEDURAL_BASIC`, change the `id`/`seed`, and then extend the generator in `proceduralSpriteSheets.ts` to draw your custom sprites for each `spriteKey`.
+
+
 ## Contributing
 
 Contributions are welcome! Whether it's reporting a bug, proposing a new feature, or submitting a pull request, your input is valued.

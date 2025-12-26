@@ -69,7 +69,8 @@ import {
 } from '@/components/game/overlays';
 import { SERVICE_CONFIG } from '@/lib/simulation';
 import { drawPlaceholderBuilding } from '@/components/game/placeholders';
-import { loadImage, loadSpriteImage, onImageLoaded, getCachedImage } from '@/components/game/imageLoader';
+import { loadImage, loadSpriteImage, onImageLoaded, getCachedImage, getImageSourceDimensions } from '@/components/game/imageLoader';
+import { ensureSpriteSheetLoaded } from '@/components/game/spriteSheetProvider';
 import { TileInfoPanel } from '@/components/game/panels';
 import {
   findMarinasAndPiers,
@@ -154,7 +155,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   const lightingCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const renderPendingRef = useRef<number | null>(null); // PERF: Track pending render frame
-  const lastMainRenderTimeRef = useRef<number>(0); // PERF: Throttle main renders at high speed
   const [offset, setOffset] = useState({ x: isMobile ? 200 : 620, y: isMobile ? 100 : 160 });
   const [isDragging, setIsDragging] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
@@ -823,7 +823,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     // Priority: main sprite sheet first, then water, then secondary sheets
     
     // High priority - main sprite sheet
-    loadSpriteImage(currentSpritePack.src, true).catch(console.error);
+    ensureSpriteSheetLoaded(currentSpritePack, 'main', { applyFilter: true }).catch(console.error);
     
     // High priority - water texture
     loadImage(WATER_ASSET_PATH).catch(console.error);
@@ -832,31 +832,31 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     // This allows the main content to render first
     const loadSecondarySheets = () => {
       if (currentSpritePack.constructionSrc) {
-        loadSpriteImage(currentSpritePack.constructionSrc, true).catch(console.error);
+        ensureSpriteSheetLoaded(currentSpritePack, 'construction', { applyFilter: true }).catch(console.error);
       }
       if (currentSpritePack.abandonedSrc) {
-        loadSpriteImage(currentSpritePack.abandonedSrc, true).catch(console.error);
+        ensureSpriteSheetLoaded(currentSpritePack, 'abandoned', { applyFilter: true }).catch(console.error);
       }
       if (currentSpritePack.denseSrc) {
-        loadSpriteImage(currentSpritePack.denseSrc, true).catch(console.error);
+        ensureSpriteSheetLoaded(currentSpritePack, 'dense', { applyFilter: true }).catch(console.error);
       }
       if (currentSpritePack.parksSrc) {
-        loadSpriteImage(currentSpritePack.parksSrc, true).catch(console.error);
+        ensureSpriteSheetLoaded(currentSpritePack, 'parks', { applyFilter: true }).catch(console.error);
       }
       if (currentSpritePack.parksConstructionSrc) {
-        loadSpriteImage(currentSpritePack.parksConstructionSrc, true).catch(console.error);
+        ensureSpriteSheetLoaded(currentSpritePack, 'parksConstruction', { applyFilter: true }).catch(console.error);
       }
       if (currentSpritePack.farmsSrc) {
-        loadSpriteImage(currentSpritePack.farmsSrc, true).catch(console.error);
+        ensureSpriteSheetLoaded(currentSpritePack, 'farms', { applyFilter: true }).catch(console.error);
       }
       if (currentSpritePack.shopsSrc) {
-        loadSpriteImage(currentSpritePack.shopsSrc, true).catch(console.error);
+        ensureSpriteSheetLoaded(currentSpritePack, 'shops', { applyFilter: true }).catch(console.error);
       }
       if (currentSpritePack.stationsSrc) {
-        loadSpriteImage(currentSpritePack.stationsSrc, true).catch(console.error);
+        ensureSpriteSheetLoaded(currentSpritePack, 'stations', { applyFilter: true }).catch(console.error);
       }
       if (currentSpritePack.modernSrc) {
-        loadSpriteImage(currentSpritePack.modernSrc, true).catch(console.error);
+        ensureSpriteSheetLoaded(currentSpritePack, 'modern', { applyFilter: true }).catch(console.error);
       }
       // Load airplane sprite sheet (always loaded, not dependent on sprite pack)
       loadSpriteImage(AIRPLANE_SPRITE_SRC, false).catch(console.error);
@@ -928,18 +928,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     // PERF: Defer render to next animation frame - batches multiple state updates into one render
     renderPendingRef.current = requestAnimationFrame(() => {
       renderPendingRef.current = null;
-      
-      // PERF: Throttle main renders at 3x speed to reduce dropped frames
-      // At high speed, we can skip some renders since simulation ticks are frequent
-      const currentSpeed = worldStateRef.current.speed;
-      const now = performance.now();
-      const timeSinceLastRender = now - lastMainRenderTimeRef.current;
-      const minRenderInterval = currentSpeed === 3 ? 50 : 0; // Skip renders within 50ms at 3x speed
-      
-      if (timeSinceLastRender < minRenderInterval) {
-        return; // Skip this render, next tick will trigger a new one
-      }
-      lastMainRenderTimeRef.current = now;
       
       const dpr = window.devicePixelRatio || 1;
     
@@ -2004,8 +1992,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       const tileCenterY = screenY + h / 2;
       
       // Random subcrop of water texture based on tile position for variety
-      const imgW = waterImage.naturalWidth || waterImage.width;
-      const imgH = waterImage.naturalHeight || waterImage.height;
+      const { width: imgW, height: imgH } = getImageSourceDimensions(waterImage);
       
       // Deterministic "random" offset based on tile position
       const seedX = ((gridX * 7919 + gridY * 6271) % 1000) / 1000;
@@ -2114,8 +2101,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             const tileCenterY = y + h / 2;
             
             // Random subcrop of water texture based on tile position for variety
-            const imgW = waterImage.naturalWidth || waterImage.width;
-            const imgH = waterImage.naturalHeight || waterImage.height;
+            const { width: imgW, height: imgH } = getImageSourceDimensions(waterImage);
             
             // Deterministic "random" offset based on tile position
             const seedX = ((gridX * 7919 + gridY * 6271) % 1000) / 1000;
@@ -2389,9 +2375,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           const filteredSpriteSheet = getCachedImage(spriteSource, true) || getCachedImage(spriteSource);
           
           if (filteredSpriteSheet) {
-            // Use naturalWidth/naturalHeight for accurate source dimensions
-            const sheetWidth = filteredSpriteSheet.naturalWidth || filteredSpriteSheet.width;
-            const sheetHeight = filteredSpriteSheet.naturalHeight || filteredSpriteSheet.height;
+            // Use naturalWidth/naturalHeight (or width/height) for accurate source dimensions
+            const { width: sheetWidth, height: sheetHeight } = getImageSourceDimensions(filteredSpriteSheet);
             
             // Get sprite coordinates - either from parks, dense variant, modern variant, farm variant, shop variant, station variant, or normal mapping
             let coords: { sx: number; sy: number; sw: number; sh: number } | null;
@@ -3635,17 +3620,14 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         // PERF: Use cached crossing positions instead of O(n²) grid scan
         const trains = trainsRef.current;
         const gateAngles = crossingGateAnglesRef.current;
-        // PERF: Access speed via worldStateRef to avoid animation restart on speed change
-        const currentSpeed = worldStateRef.current.speed;
-        const gateSpeedMult = currentSpeed === 0 ? 0 : currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2.5 : 4;
+        const gateSpeedMult = speed === 0 ? 0 : speed === 1 ? 1 : speed === 2 ? 2.5 : 4;
         const crossings = crossingPositionsRef.current;
-        const currentGridSize = worldStateRef.current.gridSize;
         
         // Iterate only over known crossings (O(k) where k = number of crossings)
         for (let i = 0; i < crossings.length; i++) {
           const { x: gx, y: gy } = crossings[i];
           // PERF: Use numeric key instead of string concatenation
-          const key = gy * currentGridSize + gx;
+          const key = gy * gridSize + gx;
           const currentAngle = gateAngles.get(key) ?? 0;
           const crossingState = getCrossingStateForTile(trains, gx, gy);
           
@@ -3704,8 +3686,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  // PERF: Removed grid, gridSize, speed from deps - they're accessed via worldStateRef to avoid restarting animation on every tick
-  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, drawRecreationPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateSeaplanes, drawSeaplanes, updateBoats, drawBoats, updateBarges, drawBarges, updateTrains, drawTrainsCallback, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, visualHour, isMobile]);
+  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, drawRecreationPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateSeaplanes, drawSeaplanes, updateBoats, drawBoats, updateBarges, drawBarges, updateTrains, drawTrainsCallback, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, visualHour, isMobile, grid, gridSize, speed]);
   
   // Day/Night cycle lighting rendering - optimized for performance
   useEffect(() => {
@@ -3774,11 +3755,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     // PERF: Pre-compute visible diagonal range to skip entire rows of tiles
     // In isometric rendering, screenY = (x + y) * (TILE_HEIGHT / 2), so sum = x + y = screenY * 2 / TILE_HEIGHT
     // Add padding for tall buildings that may extend above their tile position
-    // PERF: Read grid/gridSize from ref to avoid triggering re-render on every simulation tick
-    const currentGrid = worldStateRef.current.grid;
-    const currentGridSize = worldStateRef.current.gridSize;
     const visibleMinSum = Math.max(0, Math.floor((viewTop - TILE_HEIGHT * 6) * 2 / TILE_HEIGHT));
-    const visibleMaxSum = Math.min(currentGridSize * 2 - 2, Math.ceil((viewBottom + TILE_HEIGHT) * 2 / TILE_HEIGHT));
+    const visibleMaxSum = Math.min(gridSize * 2 - 2, Math.ceil((viewBottom + TILE_HEIGHT) * 2 / TILE_HEIGHT));
     
     const gridToScreen = (gx: number, gy: number) => ({
       screenX: (gx - gy) * TILE_WIDTH / 2,
@@ -3810,9 +3788,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     // PERF: Only iterate through diagonal bands that intersect the visible viewport
     // This skips entire rows of tiles that can't possibly be visible, significantly reducing iterations
     for (let sum = visibleMinSum; sum <= visibleMaxSum; sum++) {
-      for (let x = Math.max(0, sum - currentGridSize + 1); x <= Math.min(sum, currentGridSize - 1); x++) {
+      for (let x = Math.max(0, sum - gridSize + 1); x <= Math.min(sum, gridSize - 1); x++) {
         const y = sum - x;
-        if (y < 0 || y >= currentGridSize) continue;
+        if (y < 0 || y >= gridSize) continue;
         
         const { screenX, screenY } = gridToScreen(x, y);
         
@@ -3822,7 +3800,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           continue;
         }
         
-        const tile = currentGrid[y][x];
+        const tile = grid[y][x];
         const buildingType = tile.building.type;
         
         if (buildingType === 'road' || buildingType === 'bridge') {
@@ -3976,9 +3954,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     ctx.restore();
     ctx.globalCompositeOperation = 'source-over';
     
-  // PERF: Use worldStateRef instead of grid/gridSize in deps to avoid re-running on every simulation tick
-  // Lighting only needs to update when visualHour changes or viewport moves, not every time grid state changes
-  }, [visualHour, offset, zoom, canvasSize.width, canvasSize.height, isMobile, isPanning]);
+  }, [grid, gridSize, visualHour, offset, zoom, canvasSize.width, canvasSize.height, isMobile, isPanning]);
   
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 1 || (e.button === 0 && e.altKey)) {

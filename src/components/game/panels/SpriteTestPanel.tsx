@@ -5,12 +5,14 @@ import { useGame } from '@/context/GameContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getSpriteCoords } from '@/lib/renderConfig';
+import { ensureSpriteSheetLoaded, getSpriteSheetSrc, type SpriteSheetKind } from '@/components/game/spriteSheetProvider';
+import { getCachedImage, getImageSourceDimensions } from '@/components/game/imageLoader';
 
 export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
   const { currentSpritePack } = useGame();
   const [selectedTab, setSelectedTab] = useState<string>('main');
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [spriteSheets, setSpriteSheets] = useState<Record<string, HTMLImageElement | null>>({
+  const [spriteSheets, setSpriteSheets] = useState<Record<string, CanvasImageSource | null>>({
     main: null,
     construction: null,
     abandoned: null,
@@ -20,37 +22,61 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
     parksConstruction: null,
   });
   
-  // Load all sprite sheets from current pack
+  // Load all sprite sheets from current pack (supports both file-based and procedural packs)
   useEffect(() => {
-    const loadSheet = (src: string | undefined, key: string): Promise<void> => {
-      if (!src) {
-        setSpriteSheets(prev => ({ ...prev, [key]: null }));
-        return Promise.resolve();
-      }
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          setSpriteSheets(prev => ({ ...prev, [key]: img }));
-          resolve();
-        };
-        img.onerror = () => {
-          setSpriteSheets(prev => ({ ...prev, [key]: null }));
-          resolve();
-        };
-        img.src = src;
-      });
+    let cancelled = false;
+
+    const empty: Record<string, CanvasImageSource | null> = {
+      main: null,
+      construction: null,
+      abandoned: null,
+      dense: null,
+      modern: null,
+      parks: null,
+      parksConstruction: null,
     };
-    
-    Promise.all([
-      loadSheet(currentSpritePack.src, 'main'),
-      loadSheet(currentSpritePack.constructionSrc, 'construction'),
-      loadSheet(currentSpritePack.abandonedSrc, 'abandoned'),
-      loadSheet(currentSpritePack.denseSrc, 'dense'),
-      loadSheet(currentSpritePack.modernSrc, 'modern'),
-      loadSheet(currentSpritePack.parksSrc, 'parks'),
-      loadSheet(currentSpritePack.parksConstructionSrc, 'parksConstruction'),
-    ]);
+
+    const kinds: Array<{ key: keyof typeof empty; kind: SpriteSheetKind }> = [
+      { key: 'main', kind: 'main' },
+      { key: 'construction', kind: 'construction' },
+      { key: 'abandoned', kind: 'abandoned' },
+      { key: 'dense', kind: 'dense' },
+      { key: 'modern', kind: 'modern' },
+      { key: 'parks', kind: 'parks' },
+      { key: 'parksConstruction', kind: 'parksConstruction' },
+    ];
+
+    const loadAll = async () => {
+      const next = { ...empty };
+
+      for (const { key, kind } of kinds) {
+        const src = getSpriteSheetSrc(currentSpritePack, kind);
+        if (!src) {
+          next[key] = null;
+          continue;
+        }
+
+        try {
+          await ensureSpriteSheetLoaded(currentSpritePack, kind, { applyFilter: true });
+        } catch {
+          // Ignore load/generation errors; we'll just keep it null.
+        }
+
+        next[key] = (getCachedImage(src, true) || getCachedImage(src) || null);
+      }
+
+      if (!cancelled) {
+        setSpriteSheets(next);
+      }
+    };
+
+    loadAll();
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentSpritePack]);
+
   
   const availableTabs = useMemo(() => [
     { id: 'main', label: 'Main', available: !!spriteSheets.main },
@@ -96,8 +122,7 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
     const cols = 5;
     
     let itemsToRender: Array<{ label: string; coords: { sx: number; sy: number; sw: number; sh: number }; index?: number }> = [];
-    let sheetWidth = spriteSheet.naturalWidth || spriteSheet.width;
-    let sheetHeight = spriteSheet.naturalHeight || spriteSheet.height;
+    const { width: sheetWidth, height: sheetHeight } = getImageSourceDimensions(spriteSheet);
     let sheetCols = currentSpritePack.cols;
     let sheetRows = currentSpritePack.rows;
     

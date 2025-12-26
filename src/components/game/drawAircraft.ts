@@ -287,8 +287,8 @@ export function drawAirplanes(
       const spriteInfo = getPlaneSprite(
         plane.planeType,
         direction,
-        planeSprite.naturalWidth || planeSprite.width,
-        planeSprite.naturalHeight || planeSprite.height
+        getImageSourceDimensions(planeSprite).width,
+        getImageSourceDimensions(planeSprite).height
       );
       
       if (spriteInfo) {
@@ -1067,8 +1067,8 @@ export function drawSeaplanes(
       const spriteInfo = getPlaneSprite(
         'seaplane' as PlaneType,
         direction,
-        planeSprite.naturalWidth || planeSprite.width,
-        planeSprite.naturalHeight || planeSprite.height
+        getImageSourceDimensions(planeSprite).width,
+        getImageSourceDimensions(planeSprite).height
       );
       
       if (spriteInfo) {
