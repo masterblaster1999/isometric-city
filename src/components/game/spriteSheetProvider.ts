@@ -8,7 +8,10 @@
 
 import type { SpritePack } from '@/lib/renderConfig';
 import { loadSpriteImage, registerGeneratedImage, isImageCached } from '@/components/game/imageLoader';
-import { generateProceduralSpriteSheet, isProceduralSpritePack, type ProceduralSpriteSheetVariant } from '@/lib/proceduralSpriteSheets';
+import {
+  generateProceduralSpriteSheetForKind,
+  isProceduralSpritePack,
+} from '@/lib/proceduralSpriteSheets';
 
 export type SpriteSheetKind =
   | 'main'
@@ -49,13 +52,6 @@ export function getSpriteSheetSrc(pack: SpritePack, kind: SpriteSheetKind): stri
   }
 }
 
-function kindToProceduralVariant(kind: SpriteSheetKind): ProceduralSpriteSheetVariant | null {
-  if (kind === 'main') return 'main';
-  if (kind === 'construction') return 'construction';
-  if (kind === 'abandoned') return 'abandoned';
-  return null;
-}
-
 /**
  * Ensure a sprite sheet is available for the given pack.
  *
@@ -71,19 +67,17 @@ export async function ensureSpriteSheetLoaded(
   if (!src) return;
 
   // Procedural packs: generate and register.
-  if (isProceduralSpritePack(pack)) {
-    const variant = kindToProceduralVariant(kind);
-    if (!variant) {
-      // Not supported by the basic procedural generator yet.
-      return;
-    }
+  // We also treat `src` values starting with `procedural:` as procedural, even if
+  // the pack forgot to set `pack.procedural`.
+  if (isProceduralSpritePack(pack) || src.startsWith('procedural:')) {
 
     // If either the raw key or filtered key is cached, we're done.
     if (isImageCached(src, false) || isImageCached(src, true)) {
       return;
     }
 
-    const sheet = generateProceduralSpriteSheet(pack, variant);
+    const sheet = generateProceduralSpriteSheetForKind(pack, kind);
+    if (!sheet) return;
 
     // Register under both keys so the renderer's `getCachedImage(src, true)` path works.
     registerGeneratedImage(src, sheet, { alsoRegisterFiltered: true });

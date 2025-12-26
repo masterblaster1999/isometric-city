@@ -614,7 +614,7 @@ const SPRITE_PACK_PROCEDURAL_BASIC: SpritePack = {
   ...SPRITE_PACK_SPRITES4,
 
   id: 'procedural-basic',
-  name: 'Procedural (Prototype)',
+  name: 'Procedural (Generated)',
   previewSrc: PROCEDURAL_PREVIEW_SVG,
 
   // Cache-key style sources (NOT URLs)
@@ -622,20 +622,14 @@ const SPRITE_PACK_PROCEDURAL_BASIC: SpritePack = {
   constructionSrc: 'procedural:procedural-basic:construction',
   abandonedSrc: 'procedural:procedural-basic:abandoned',
 
-  // Disable file-backed variants (dense/parks/shops/etc.) for the prototype
-  denseSrc: undefined,
-  denseVariants: undefined,
-  modernSrc: undefined,
-  modernVariants: undefined,
-  parksSrc: undefined,
-  parksConstructionSrc: undefined,
-  parksBuildings: undefined,
-  farmsSrc: undefined,
-  farmsVariants: undefined,
-  shopsSrc: undefined,
-  shopsVariants: undefined,
-  stationsSrc: undefined,
-  stationsVariants: undefined,
+  // Additional sheets (still cache-keys, NOT URLs)
+  denseSrc: 'procedural:procedural-basic:dense',
+  modernSrc: 'procedural:procedural-basic:modern',
+  parksSrc: 'procedural:procedural-basic:parks',
+  parksConstructionSrc: 'procedural:procedural-basic:parksConstruction',
+  farmsSrc: 'procedural:procedural-basic:farms',
+  shopsSrc: 'procedural:procedural-basic:shops',
+  stationsSrc: 'procedural:procedural-basic:stations',
 
   // Neutral offsets (procedural art is generated with its own padding)
   verticalOffsets: {},

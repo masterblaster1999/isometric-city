@@ -20,6 +20,9 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
     modern: null,
     parks: null,
     parksConstruction: null,
+    farms: null,
+    shops: null,
+    stations: null,
   });
   
   // Load all sprite sheets from current pack (supports both file-based and procedural packs)
@@ -34,6 +37,9 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
       modern: null,
       parks: null,
       parksConstruction: null,
+      farms: null,
+      shops: null,
+      stations: null,
     };
 
     const kinds: Array<{ key: keyof typeof empty; kind: SpriteSheetKind }> = [
@@ -44,6 +50,9 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
       { key: 'modern', kind: 'modern' },
       { key: 'parks', kind: 'parks' },
       { key: 'parksConstruction', kind: 'parksConstruction' },
+      { key: 'farms', kind: 'farms' },
+      { key: 'shops', kind: 'shops' },
+      { key: 'stations', kind: 'stations' },
     ];
 
     const loadAll = async () => {
@@ -86,6 +95,9 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
     { id: 'modern', label: 'Modern', available: !!spriteSheets.modern },
     { id: 'parks', label: 'Parks', available: !!spriteSheets.parks },
     { id: 'parksConstruction', label: 'Parks Construction', available: !!spriteSheets.parksConstruction },
+    { id: 'farms', label: 'Farms', available: !!spriteSheets.farms },
+    { id: 'shops', label: 'Shops', available: !!spriteSheets.shops },
+    { id: 'stations', label: 'Stations', available: !!spriteSheets.stations },
   ].filter(tab => tab.available), [spriteSheets]);
   
   // Derive the actual active tab - fall back to first available if selected is not available
@@ -223,6 +235,54 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
           coords: { sx, sy, sw: tileWidth, sh: tileHeight },
         });
       });
+    } else if (activeTab === 'farms' && currentSpritePack.farmsSrc && currentSpritePack.farmsVariants) {
+      sheetCols = currentSpritePack.farmsCols || currentSpritePack.cols;
+      sheetRows = currentSpritePack.farmsRows || currentSpritePack.rows;
+      const tileWidth = Math.floor(sheetWidth / sheetCols);
+      const tileHeight = Math.floor(sheetHeight / sheetRows);
+
+      Object.entries(currentSpritePack.farmsVariants).forEach(([buildingType, variants]) => {
+        variants.forEach((pos, i) => {
+          const sx = pos.col * tileWidth;
+          const sy = pos.row * tileHeight;
+          itemsToRender.push({
+            label: `${buildingType} (farm ${i + 1})`,
+            coords: { sx, sy, sw: tileWidth, sh: tileHeight },
+          });
+        });
+      });
+    } else if (activeTab === 'shops' && currentSpritePack.shopsSrc && currentSpritePack.shopsVariants) {
+      sheetCols = currentSpritePack.shopsCols || currentSpritePack.cols;
+      sheetRows = currentSpritePack.shopsRows || currentSpritePack.rows;
+      const tileWidth = Math.floor(sheetWidth / sheetCols);
+      const tileHeight = Math.floor(sheetHeight / sheetRows);
+
+      Object.entries(currentSpritePack.shopsVariants).forEach(([buildingType, variants]) => {
+        variants.forEach((pos, i) => {
+          const sx = pos.col * tileWidth;
+          const sy = pos.row * tileHeight;
+          itemsToRender.push({
+            label: `${buildingType} (shop ${i + 1})`,
+            coords: { sx, sy, sw: tileWidth, sh: tileHeight },
+          });
+        });
+      });
+    } else if (activeTab === 'stations' && currentSpritePack.stationsSrc && currentSpritePack.stationsVariants) {
+      sheetCols = currentSpritePack.stationsCols || currentSpritePack.cols;
+      sheetRows = currentSpritePack.stationsRows || currentSpritePack.rows;
+      const tileWidth = Math.floor(sheetWidth / sheetCols);
+      const tileHeight = Math.floor(sheetHeight / sheetRows);
+
+      Object.entries(currentSpritePack.stationsVariants).forEach(([buildingType, variants]) => {
+        variants.forEach((pos, i) => {
+          const sx = pos.col * tileWidth;
+          const sy = pos.row * tileHeight;
+          itemsToRender.push({
+            label: `${buildingType} (station ${i + 1})`,
+            coords: { sx, sy, sw: tileWidth, sh: tileHeight },
+          });
+        });
+      });
     }
     
     const rows = Math.ceil(itemsToRender.length / cols);
@@ -309,11 +369,21 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
                           activeTab === 'dense' ? currentSpritePack.denseSrc :
                           activeTab === 'modern' ? currentSpritePack.modernSrc :
                           activeTab === 'parksConstruction' ? currentSpritePack.parksConstructionSrc :
+                          activeTab === 'farms' ? currentSpritePack.farmsSrc :
+                          activeTab === 'shops' ? currentSpritePack.shopsSrc :
+                          activeTab === 'stations' ? currentSpritePack.stationsSrc :
                           currentSpritePack.parksSrc;
   
-  const gridInfo = (activeTab === 'parks' || activeTab === 'parksConstruction') && currentSpritePack.parksCols && currentSpritePack.parksRows
-    ? `${currentSpritePack.parksCols}x${currentSpritePack.parksRows}`
-    : `${currentSpritePack.cols}x${currentSpritePack.rows}`;
+  const gridInfo =
+    (activeTab === 'parks' || activeTab === 'parksConstruction') && currentSpritePack.parksCols && currentSpritePack.parksRows
+      ? `${currentSpritePack.parksCols}x${currentSpritePack.parksRows}`
+      : activeTab === 'farms' && currentSpritePack.farmsCols && currentSpritePack.farmsRows
+        ? `${currentSpritePack.farmsCols}x${currentSpritePack.farmsRows}`
+        : activeTab === 'shops' && currentSpritePack.shopsCols && currentSpritePack.shopsRows
+          ? `${currentSpritePack.shopsCols}x${currentSpritePack.shopsRows}`
+          : activeTab === 'stations' && currentSpritePack.stationsCols && currentSpritePack.stationsRows
+            ? `${currentSpritePack.stationsCols}x${currentSpritePack.stationsRows}`
+            : `${currentSpritePack.cols}x${currentSpritePack.rows}`;
   
   return (
     <Dialog open={true} onOpenChange={onClose}>

@@ -159,14 +159,30 @@ export function SettingsPanel() {
                     }`}
                   >
                     <div className="w-10 h-10 rounded overflow-hidden bg-muted flex-shrink-0 relative">
-                      <Image 
-                        src={pack.previewSrc ?? pack.src} 
-                        alt={pack.name}
-                        fill
-                        className="object-cover object-top"
-                        style={{ imageRendering: 'pixelated' }}
-                        unoptimized
-                      />
+                      {(() => {
+                        const fallback = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+                          `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+                            <rect width="200" height="200" fill="#0b1220"/>
+                            <polygon points="100,32 160,70 100,108 40,70" fill="#22c55e"/>
+                            <polygon points="40,70 100,108 100,168 40,130" fill="#16a34a"/>
+                            <polygon points="160,70 100,108 100,168 160,130" fill="#15803d"/>
+                            <text x="100" y="190" font-size="20" fill="#e2e8f0" text-anchor="middle" font-family="Arial">PROC</text>
+                          </svg>`
+                        )}`;
+                        const src = pack.previewSrc
+                          ?? (pack.src.startsWith('procedural:') ? fallback : pack.src);
+
+                        return (
+                          <Image
+                            src={src}
+                            alt={pack.name}
+                            fill
+                            className="object-cover object-top"
+                            style={{ imageRendering: 'pixelated' }}
+                            unoptimized
+                          />
+                        );
+                      })()}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm truncate">{pack.name}</div>

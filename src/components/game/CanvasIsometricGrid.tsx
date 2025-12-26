@@ -2386,6 +2386,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             let isShopVariant = false;
             let isStationVariant = false;
             let isParksBuilding = false;
+            const isProceduralPack = !!activePack.procedural || (activePack.src?.startsWith('procedural:') ?? false);
             if (useParksBuilding) {
               isParksBuilding = true;
               // Calculate coordinates from parks sprite sheet using its own grid dimensions
@@ -2395,6 +2396,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               const tileHeight = Math.floor(sheetHeight / parksRows);
               let sourceY = useParksBuilding.row * tileHeight;
               let sourceH = tileHeight;
+
+              // File-based sprite sheets contain artwork that bleeds across cell boundaries.
+              // Procedural sheets do not need these per-row cropping hacks.
+              if (!isProceduralPack) {
               
               // Special handling for buildings that have content bleeding from row above - shift source down to avoid capturing
               // content from the sprite above it in the sprite sheet
@@ -2423,6 +2428,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                 sourceH = tileHeight * 1.1; // Increase height by 10% to avoid bottom clipping
               }
               
+              }
+
               coords = {
                 sx: useParksBuilding.col * tileWidth,
                 sy: sourceY,
@@ -2436,20 +2443,18 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               const tileHeight = Math.floor(sheetHeight / activePack.rows);
               let sourceY = useDenseVariant.row * tileHeight;
               let sourceH = tileHeight;
-              // For mall dense variants (rows 2-3), shift source Y down to avoid capturing
-              // content from the row above that bleeds into the cell boundary
-              if (buildingType === 'mall') {
-                sourceY += tileHeight * 0.12; // Shift down ~12% to avoid row above
-              }
-              // For factory_large dense variants (row 4), shift source Y down to avoid capturing
-              // content from the row above that bleeds into the cell boundary
-              if (buildingType === 'factory_large') {
-                sourceY += tileHeight * 0.05; // Shift down ~5% to avoid row above
-                sourceH = tileHeight * 0.95; // Reduce height slightly to avoid row below clipping
-              }
-              // For apartment_high dense variants, add a bit more height to avoid cutoff at bottom
-              if (buildingType === 'apartment_high') {
-                sourceH = tileHeight * 1.05; // Add 5% more height at bottom
+              if (!isProceduralPack) {
+                // File sheet fixes: avoid capturing bleed from neighboring rows.
+                if (buildingType === 'mall') {
+                  sourceY += tileHeight * 0.12; // Shift down ~12% to avoid row above
+                }
+                if (buildingType === 'factory_large') {
+                  sourceY += tileHeight * 0.05; // Shift down ~5% to avoid row above
+                  sourceH = tileHeight * 0.95; // Reduce height slightly to avoid row below clipping
+                }
+                if (buildingType === 'apartment_high') {
+                  sourceH = tileHeight * 1.05; // Add 5% more height at bottom
+                }
               }
               coords = {
                 sx: useDenseVariant.col * tileWidth,
@@ -2464,20 +2469,20 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               const tileHeight = Math.floor(sheetHeight / activePack.rows);
               let sourceY = useModernVariant.row * tileHeight;
               let sourceH = tileHeight;
-              // For mall modern variants (rows 2-3), shift source Y down to avoid capturing
-              // content from the row above that bleeds into the cell boundary
-              if (buildingType === 'mall') {
-                sourceY += tileHeight * 0.15; // Shift down ~15% to avoid row above
-                // For row 3 mall variants, crop bottom to avoid picking up industrial assets from row 4
-                if (useModernVariant.row === 3) {
-                  sourceH = tileHeight * 0.95; // Slight crop at bottom to exclude industrial asset
-                } else {
-                  sourceH = tileHeight * 0.85; // Crop 15% off bottom for other mall rows
+              if (!isProceduralPack) {
+                // File sheet fixes: avoid capturing bleed from neighboring rows.
+                if (buildingType === 'mall') {
+                  sourceY += tileHeight * 0.15; // Shift down ~15% to avoid row above
+                  // For row 3 mall variants, crop bottom to avoid picking up industrial assets from row 4
+                  if (useModernVariant.row === 3) {
+                    sourceH = tileHeight * 0.95; // Slight crop at bottom to exclude industrial asset
+                  } else {
+                    sourceH = tileHeight * 0.85; // Crop 15% off bottom for other mall rows
+                  }
                 }
-              }
-              // For apartment_high modern variants, add a bit more height to avoid cutoff at bottom
-              if (buildingType === 'apartment_high') {
-                sourceH = tileHeight * 1.05; // Add 5% more height at bottom
+                if (buildingType === 'apartment_high') {
+                  sourceH = tileHeight * 1.05; // Add 5% more height at bottom
+                }
               }
               coords = {
                 sx: useModernVariant.col * tileWidth,
@@ -2524,23 +2529,23 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               const tileHeight = Math.floor(sheetHeight / stationsRows);
               let sourceY = useStationVariant.row * tileHeight;
               let sourceH = tileHeight;
-              
-              // Special handling for rows that have content bleeding from row above
-              // Third row (row 2, 0-indexed) - shift down to avoid capturing content from row above
-              if (useStationVariant.row === 2) {
-                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
-              }
-              // Fourth row (row 3, 0-indexed) - shift down to avoid capturing content from row above
-              // Also reduce height slightly to crop out bottom clipping from row below
-              if (useStationVariant.row === 3) {
-                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
-                sourceH -= tileHeight * 0.05; // Reduce height by 5% to crop bottom clipping
-              }
-              // Fifth row (row 4, 0-indexed) - shift down to avoid capturing content from row above
-              // Also reduce height to crop out bottom clipping from row below
-              if (useStationVariant.row === 4) {
-                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
-                sourceH -= tileHeight * 0.1; // Reduce height by 10% to crop bottom clipping
+
+              if (!isProceduralPack) {
+                // File sheet fixes: avoid capturing bleed from neighboring rows.
+                // Third row (row 2, 0-indexed) - shift down to avoid capturing content from row above
+                if (useStationVariant.row === 2) {
+                  sourceY += tileHeight * 0.1;
+                }
+                // Fourth row (row 3, 0-indexed)
+                if (useStationVariant.row === 3) {
+                  sourceY += tileHeight * 0.1;
+                  sourceH -= tileHeight * 0.05;
+                }
+                // Fifth row (row 4, 0-indexed)
+                if (useStationVariant.row === 4) {
+                  sourceY += tileHeight * 0.1;
+                  sourceH -= tileHeight * 0.1;
+                }
               }
               
               coords = {
@@ -2553,10 +2558,12 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               // getSpriteCoords handles building type to sprite key mapping
               coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight);
               
-              // Special cropping for factory_large base sprite - crop bottom to remove asset below
-              if (buildingType === 'factory_large' && coords) {
-                const tileHeight = Math.floor(sheetHeight / activePack.rows);
-                coords.sh = coords.sh - tileHeight * 0.08; // Crop 8% from bottom
+              if (!isProceduralPack) {
+                // File sheet fix: crop bottom to remove bleed from assets below.
+                if (buildingType === 'factory_large' && coords) {
+                  const tileHeight = Math.floor(sheetHeight / activePack.rows);
+                  coords.sh = coords.sh - tileHeight * 0.08;
+                }
               }
             }
             
@@ -2585,6 +2592,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               // Scale factor: 1.2 base (reduced from 1.5 for ~20% smaller)
               // Multi-tile buildings scale with their footprint
               let scaleMultiplier = isMultiTile ? Math.max(buildingSize.width, buildingSize.height) : 1;
+              if (!isProceduralPack) {
               // Special scale adjustment for airport (no scaling - was scaled up 5%, now scaled down 5%)
               if (buildingType === 'airport') {
                 scaleMultiplier *= 1.0; // Scale down 5% from previous 1.05
@@ -2647,6 +2655,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               // Special scale adjustment for modern mall variants (scaled down 15%)
               if (buildingType === 'mall' && isModernVariant) {
                 scaleMultiplier *= 0.85;
+              }
               }
               // Apply dense-specific scale if building uses dense variant and has custom scale in config
               if (isDenseVariant && activePack.denseScales && buildingType in activePack.denseScales) {
@@ -2758,9 +2767,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               } else if (spriteKey && SPRITE_VERTICAL_OFFSETS[spriteKey]) {
                 extraOffset = SPRITE_VERTICAL_OFFSETS[spriteKey] * h;
               }
-              // Special vertical offset adjustment for hospital (shift up 0.1 tiles)
-              if (buildingType === 'hospital') {
-                extraOffset -= 0.1 * h; // Shift up by 0.1 tiles
+              if (!isProceduralPack) {
+                // Special vertical offset adjustment for hospital (sprite-sheet art alignment)
+                if (buildingType === 'hospital') {
+                  extraOffset -= 0.1 * h;
+                }
               }
               verticalPush += extraOffset;
               

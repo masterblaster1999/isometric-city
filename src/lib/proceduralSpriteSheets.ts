@@ -9,8 +9,23 @@
 // for procedurally generated assets without changing the rendering logic.
 
 import type { SpritePack } from '@/lib/renderConfig';
+import { getProceduralPrefixRenderer } from '@/lib/proceduralSpriteExtensions';
 
 export type ProceduralSpriteSheetVariant = 'main' | 'construction' | 'abandoned';
+
+// Mirrors the sprite-sheet kinds used by the renderer, but lives in `lib/` so
+// procedural generation can remain UI/framework agnostic.
+export type ProceduralSpriteSheetKind =
+  | 'main'
+  | 'construction'
+  | 'abandoned'
+  | 'dense'
+  | 'modern'
+  | 'parks'
+  | 'parksConstruction'
+  | 'farms'
+  | 'shops'
+  | 'stations';
 
 // ------------------------------
 // Deterministic RNG (mulberry32)
@@ -97,9 +112,20 @@ type SpriteStyle = {
   accentColor?: string;
 };
 
+function splitProceduralKey(input: string): { prefix: string | null; key: string } {
+  const idx = input.indexOf(':');
+  if (idx <= 0) return { prefix: null, key: input };
+  return {
+    prefix: input.slice(0, idx),
+    key: input.slice(idx + 1),
+  };
+}
+
 function styleForSpriteKey(spriteKey: string): SpriteStyle {
+  const { prefix, key } = splitProceduralKey(spriteKey);
+
   // Defaults
-  const base: SpriteStyle = {
+  let style: SpriteStyle = {
     kind: 'building',
     baseColor: '#64748b',
     footprintX: 1.1,
@@ -110,19 +136,18 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
   };
 
   // Residential
-  if (spriteKey.includes('house')) {
-    return {
+  if (key.includes('house') || key === 'mansion' || key.includes('cabin') || key.includes('lodge')) {
+    style = {
       kind: 'building',
       baseColor: '#60a5fa',
-      footprintX: spriteKey === 'mansion' ? 1.7 : spriteKey === 'house_medium' ? 1.3 : 1.15,
-      footprintY: spriteKey === 'mansion' ? 1.6 : spriteKey === 'house_medium' ? 1.25 : 1.1,
-      height: spriteKey === 'mansion' ? 1.35 : spriteKey === 'house_medium' ? 1.1 : 0.9,
+      footprintX: key === 'mansion' || key === 'mountain_lodge' ? 1.7 : key === 'house_medium' ? 1.3 : 1.15,
+      footprintY: key === 'mansion' || key === 'mountain_lodge' ? 1.6 : key === 'house_medium' ? 1.25 : 1.1,
+      height: key === 'mansion' || key === 'mountain_lodge' ? 1.35 : key === 'house_medium' ? 1.1 : 0.9,
       roofColor: '#1d4ed8',
       accentColor: '#0b1220',
     };
-  }
-  if (spriteKey === 'residential') {
-    return {
+  } else if (key === 'residential') {
+    style = {
       kind: 'building',
       baseColor: '#3b82f6',
       footprintX: 1.55,
@@ -133,35 +158,59 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
     };
   }
 
-  // Commercial
-  if (spriteKey.includes('shop')) {
-    return {
+  // Apartments / offices (used by dense/modern variants)
+  else if (key.includes('apartment')) {
+    const isHigh = key.includes('high');
+    style = {
       kind: 'building',
-      baseColor: '#fbbf24',
-      footprintX: spriteKey === 'shop_medium' ? 1.4 : 1.2,
-      footprintY: 1.2,
-      height: spriteKey === 'shop_medium' ? 1.2 : 1.0,
-      roofColor: '#b45309',
+      baseColor: isHigh ? '#38bdf8' : '#60a5fa',
+      footprintX: isHigh ? 1.95 : 1.75,
+      footprintY: isHigh ? 1.8 : 1.65,
+      height: isHigh ? 2.9 : 2.3,
+      roofColor: isHigh ? '#0369a1' : '#1d4ed8',
+      accentColor: '#0b1220',
+    };
+  } else if (key.includes('office')) {
+    const isHigh = key.includes('high');
+    style = {
+      kind: 'building',
+      baseColor: isHigh ? '#fbbf24' : '#f59e0b',
+      footprintX: 1.9,
+      footprintY: 1.75,
+      height: isHigh ? 2.75 : 2.25,
+      roofColor: '#92400e',
       accentColor: '#111827',
     };
   }
-  if (spriteKey === 'commercial') {
-    return {
+
+  // Commercial
+  else if (key.includes('shop')) {
+    style = {
+      kind: 'building',
+      baseColor: '#fbbf24',
+      footprintX: key === 'shop_medium' ? 1.4 : 1.2,
+      footprintY: 1.2,
+      height: key === 'shop_medium' ? 1.2 : 1.0,
+      roofColor: '#b45309',
+      accentColor: '#111827',
+    };
+  } else if (key === 'commercial' || key === 'mall') {
+    style = {
       kind: 'building',
       baseColor: '#f59e0b',
-      footprintX: 1.7,
-      footprintY: 1.6,
-      height: 2.4,
+      footprintX: key === 'mall' ? 2.1 : 1.7,
+      footprintY: key === 'mall' ? 1.9 : 1.6,
+      height: key === 'mall' ? 2.8 : 2.4,
       roofColor: '#92400e',
       accentColor: '#111827',
     };
   }
 
   // Industrial
-  if (spriteKey.includes('factory') || spriteKey === 'warehouse') {
-    const isLarge = spriteKey === 'factory_large';
-    const isMed = spriteKey === 'factory_medium';
-    return {
+  else if (key.includes('factory') || key === 'warehouse') {
+    const isLarge = key === 'factory_large';
+    const isMed = key === 'factory_medium';
+    style = {
       kind: 'building',
       baseColor: '#9ca3af',
       footprintX: isLarge ? 2.0 : isMed ? 1.6 : 1.35,
@@ -170,9 +219,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
       roofColor: '#6b7280',
       accentColor: '#111827',
     };
-  }
-  if (spriteKey === 'industrial') {
-    return {
+  } else if (key === 'industrial') {
+    style = {
       kind: 'building',
       baseColor: '#94a3b8',
       footprintX: 1.8,
@@ -184,8 +232,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
   }
 
   // Services
-  if (spriteKey.includes('police')) {
-    return {
+  else if (key.includes('police')) {
+    style = {
       kind: 'building',
       baseColor: '#a5b4fc',
       footprintX: 1.45,
@@ -194,9 +242,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
       roofColor: '#4338ca',
       accentColor: '#111827',
     };
-  }
-  if (spriteKey.includes('fire_station')) {
-    return {
+  } else if (key.includes('fire_station')) {
+    style = {
       kind: 'building',
       baseColor: '#fb7185',
       footprintX: 1.55,
@@ -205,9 +252,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
       roofColor: '#be123c',
       accentColor: '#111827',
     };
-  }
-  if (spriteKey.includes('hospital')) {
-    return {
+  } else if (key.includes('hospital')) {
+    style = {
       kind: 'building',
       baseColor: '#f1f5f9',
       footprintX: 1.7,
@@ -216,9 +262,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
       roofColor: '#94a3b8',
       accentColor: '#ef4444',
     };
-  }
-  if (spriteKey.includes('school')) {
-    return {
+  } else if (key.includes('school')) {
+    style = {
       kind: 'building',
       baseColor: '#fde68a',
       footprintX: 1.55,
@@ -227,9 +272,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
       roofColor: '#b45309',
       accentColor: '#111827',
     };
-  }
-  if (spriteKey.includes('university')) {
-    return {
+  } else if (key.includes('university')) {
+    style = {
       kind: 'building',
       baseColor: '#c4b5fd',
       footprintX: 1.75,
@@ -241,8 +285,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
   }
 
   // Parks + nature
-  if (spriteKey === 'tree') {
-    return {
+  else if (key === 'tree') {
+    style = {
       kind: 'tree',
       baseColor: '#16a34a',
       footprintX: 1.05,
@@ -251,33 +295,37 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
       roofColor: '#14532d',
       accentColor: '#78350f',
     };
-  }
-  if (spriteKey.startsWith('park')) {
-    return {
+  } else if (
+    key.startsWith('park') ||
+    key.includes('garden') ||
+    key.includes('playground') ||
+    key.includes('camp') ||
+    key.includes('trail') ||
+    key.includes('pond') ||
+    key.includes('court') ||
+    key.includes('field') ||
+    key.includes('pool') ||
+    key.includes('skate') ||
+    key.includes('go_kart') ||
+    key.includes('roller_coaster') ||
+    key.includes('marina') ||
+    key.includes('pier')
+  ) {
+    const isLarge = key.includes('large') || key.includes('stadium') || key.includes('mountain_trailhead');
+    style = {
       kind: 'park',
-      baseColor: '#22c55e',
-      footprintX: spriteKey === 'park_large' ? 1.9 : 1.45,
-      footprintY: spriteKey === 'park_large' ? 1.75 : 1.35,
-      height: 0.55,
-      roofColor: '#166534',
-      accentColor: '#064e3b',
-    };
-  }
-  if (spriteKey === 'tennis') {
-    return {
-      kind: 'park',
-      baseColor: '#10b981',
-      footprintX: 1.7,
-      footprintY: 1.55,
+      baseColor: key.includes('pool') || key.includes('pond') ? '#3b82f6' : '#22c55e',
+      footprintX: isLarge ? 1.9 : 1.45,
+      footprintY: isLarge ? 1.75 : 1.35,
       height: 0.45,
-      roofColor: '#065f46',
+      roofColor: '#166534',
       accentColor: '#f8fafc',
     };
   }
 
   // Utilities
-  if (spriteKey === 'power_plant') {
-    return {
+  else if (key === 'power_plant') {
+    style = {
       kind: 'utility',
       baseColor: '#a3a3a3',
       footprintX: 2.0,
@@ -286,9 +334,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
       roofColor: '#525252',
       accentColor: '#f59e0b',
     };
-  }
-  if (spriteKey === 'water_tower') {
-    return {
+  } else if (key === 'water_tower') {
+    style = {
       kind: 'utility',
       baseColor: '#93c5fd',
       footprintX: 1.2,
@@ -297,9 +344,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
       roofColor: '#1d4ed8',
       accentColor: '#0f172a',
     };
-  }
-  if (spriteKey === 'subway_station') {
-    return {
+  } else if (key === 'subway_station' || key === 'rail_station') {
+    style = {
       kind: 'utility',
       baseColor: '#cbd5e1',
       footprintX: 1.6,
@@ -311,8 +357,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
   }
 
   // Special
-  if (spriteKey === 'stadium') {
-    return {
+  else if (key === 'stadium' || key.includes('stadium')) {
+    style = {
       kind: 'special',
       baseColor: '#e5e7eb',
       footprintX: 2.2,
@@ -321,9 +367,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
       roofColor: '#9ca3af',
       accentColor: '#0f172a',
     };
-  }
-  if (spriteKey === 'museum') {
-    return {
+  } else if (key === 'museum' || key.includes('amphitheater')) {
+    style = {
       kind: 'special',
       baseColor: '#fef3c7',
       footprintX: 1.85,
@@ -332,9 +377,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
       roofColor: '#b45309',
       accentColor: '#0f172a',
     };
-  }
-  if (spriteKey === 'airport') {
-    return {
+  } else if (key === 'airport') {
+    style = {
       kind: 'special',
       baseColor: '#e2e8f0',
       footprintX: 2.4,
@@ -343,9 +387,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
       roofColor: '#64748b',
       accentColor: '#0f172a',
     };
-  }
-  if (spriteKey === 'space_program') {
-    return {
+  } else if (key === 'space_program') {
+    style = {
       kind: 'special',
       baseColor: '#d1d5db',
       footprintX: 2.0,
@@ -354,9 +397,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
       roofColor: '#4b5563',
       accentColor: '#22d3ee',
     };
-  }
-  if (spriteKey === 'city_hall') {
-    return {
+  } else if (key === 'city_hall' || key.includes('park_gate')) {
+    style = {
       kind: 'special',
       baseColor: '#e0e7ff',
       footprintX: 1.9,
@@ -365,9 +407,8 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
       roofColor: '#4338ca',
       accentColor: '#111827',
     };
-  }
-  if (spriteKey === 'amusement_park') {
-    return {
+  } else if (key === 'amusement_park' || key.includes('roller_coaster') || key.includes('go_kart')) {
+    style = {
       kind: 'special',
       baseColor: '#fca5a5',
       footprintX: 2.1,
@@ -378,9 +419,9 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
     };
   }
 
-  // Water is rendered via WATER_ASSET_PATH in the engine, but keep a tile anyway.
-  if (spriteKey === 'water') {
-    return {
+  // Water (the engine has its own water rendering, but we keep a tile anyway)
+  if (key === 'water') {
+    style = {
       kind: 'park',
       baseColor: '#3b82f6',
       footprintX: 1.9,
@@ -391,7 +432,40 @@ function styleForSpriteKey(spriteKey: string): SpriteStyle {
     };
   }
 
-  return base;
+  // Prefix modifiers (dense / modern / farm / station)
+  if (prefix === 'dense') {
+    style = {
+      ...style,
+      height: style.height * 1.25,
+      footprintX: style.footprintX * 1.05,
+      footprintY: style.footprintY * 1.05,
+    };
+  } else if (prefix === 'modern') {
+    style = {
+      ...style,
+      baseColor: '#94a3b8',
+      roofColor: '#334155',
+      accentColor: '#0f172a',
+      height: style.height * 1.15,
+    };
+  } else if (prefix === 'farm') {
+    style = {
+      ...style,
+      baseColor: '#a3e635',
+      roofColor: '#4d7c0f',
+      accentColor: '#78350f',
+    };
+  } else if (prefix === 'station') {
+    style = {
+      ...style,
+      kind: 'utility',
+      baseColor: '#cbd5e1',
+      roofColor: '#64748b',
+      accentColor: '#0f172a',
+    };
+  }
+
+  return style;
 }
 
 // ------------------------------
@@ -685,6 +759,111 @@ function drawTennisCourt(ctx: CanvasRenderingContext2D, x: number, y: number, w:
   ctx.restore();
 }
 
+function drawFlatDiamond(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  fill: string,
+  stroke: string = 'rgba(15, 23, 42, 0.35)',
+  strokeWidth: number = 2,
+  alpha: number = 0.92
+): Vec2[] {
+  const pts: Vec2[] = [
+    { x: cx, y: cy - ry },
+    { x: cx + rx, y: cy },
+    { x: cx, y: cy + ry },
+    { x: cx - rx, y: cy },
+  ];
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  drawPolygon(ctx, pts, fill, stroke, strokeWidth);
+  ctx.restore();
+  return pts;
+}
+
+function drawSportsField(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  type: 'basketball' | 'soccer' | 'football' | 'baseball'
+): void {
+  const cx = x + w * 0.5;
+  const cy = y + h * 0.82;
+  const rx = w * 0.24;
+  const ry = h * 0.15;
+
+  const fill = type === 'basketball' ? '#0ea5e9' : '#16a34a';
+  drawFlatDiamond(ctx, cx, cy, rx, ry, fill, 'rgba(248, 250, 252, 0.75)', 2, 0.9);
+
+  // Simple markings
+  ctx.save();
+  ctx.strokeStyle = 'rgba(248, 250, 252, 0.85)';
+  ctx.lineWidth = 1;
+  if (type === 'basketball') {
+    ctx.beginPath();
+    ctx.moveTo(cx - rx * 0.45, cy);
+    ctx.lineTo(cx + rx * 0.45, cy);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.min(rx, ry) * 0.25, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (type === 'soccer' || type === 'football') {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - ry * 0.85);
+    ctx.lineTo(cx, cy + ry * 0.85);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.min(rx, ry) * 0.22, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (type === 'baseball') {
+    // Infield diamond
+    drawFlatDiamond(ctx, cx, cy + ry * 0.2, rx * 0.45, ry * 0.35, 'rgba(245, 158, 11, 0.85)', 'rgba(248, 250, 252, 0.65)', 1, 0.85);
+  }
+  ctx.restore();
+}
+
+function drawPool(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  const cx = x + w * 0.5;
+  const cy = y + h * 0.82;
+  drawFlatDiamond(ctx, cx, cy, w * 0.23, h * 0.14, '#0ea5e9', 'rgba(248, 250, 252, 0.85)', 2, 0.92);
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = 'rgba(248, 250, 252, 1)';
+  ctx.beginPath();
+  ctx.ellipse(cx - w * 0.05, cy - h * 0.03, w * 0.06, h * 0.02, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawTrack(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  const cx = x + w * 0.5;
+  const cy = y + h * 0.82;
+  drawFlatDiamond(ctx, cx, cy, w * 0.25, h * 0.16, '#64748b', 'rgba(15, 23, 42, 0.35)', 2, 0.9);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(248, 250, 252, 0.75)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, w * 0.12, h * 0.06, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPier(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
+  const cx = x + w * 0.5;
+  const cy = y + h * 0.82;
+  drawFlatDiamond(ctx, cx, cy, w * 0.25, h * 0.16, '#3b82f6', 'rgba(248, 250, 252, 0.35)', 2, 0.85);
+  ctx.save();
+  ctx.globalAlpha = 0.75;
+  ctx.fillStyle = '#a16207';
+  ctx.fillRect(cx - w * 0.02, cy - h * 0.08, w * 0.04, h * 0.18);
+  ctx.fillRect(cx - w * 0.12, cy - h * 0.02, w * 0.24, h * 0.05);
+  ctx.restore();
+}
+
 function drawUtilityExtras(
   ctx: CanvasRenderingContext2D,
   spriteKey: string,
@@ -750,6 +929,20 @@ function drawProceduralSpriteTile(
   ctx.save();
   ctx.clearRect(x, y, w, h);
 
+  const { prefix, key } = splitProceduralKey(spriteKey);
+
+  // Extension point: allow custom prefix renderers to fully handle a cell.
+  if (prefix) {
+    const ext = getProceduralPrefixRenderer(prefix);
+    if (ext) {
+      const handled = ext({ spriteKey, prefix, key, variant, ctx, x, y, w, h, rng });
+      if (handled === true) {
+        ctx.restore();
+        return;
+      }
+    }
+  }
+
   const style = styleForSpriteKey(spriteKey);
 
   // Common anchor
@@ -771,9 +964,26 @@ function drawProceduralSpriteTile(
     return;
   }
   if (style.kind === 'park') {
-    if (spriteKey === 'tennis') {
+    // A handful of park-sheet-only buildings are passed in with a prefix
+    // (e.g. `park:basketball_courts`). Use the base key for selection.
+    if (key === 'tennis' || key.includes('tennis')) {
       drawTennisCourt(ctx, x, y, w, h);
+    } else if (key.includes('basketball')) {
+      drawSportsField(ctx, x, y, w, h, 'basketball');
+    } else if (key.includes('soccer')) {
+      drawSportsField(ctx, x, y, w, h, 'soccer');
+    } else if (key.includes('football')) {
+      drawSportsField(ctx, x, y, w, h, 'football');
+    } else if (key.includes('baseball')) {
+      drawSportsField(ctx, x, y, w, h, 'baseball');
+    } else if (key.includes('pool')) {
+      drawPool(ctx, x, y, w, h);
+    } else if (key.includes('go_kart') || key.includes('roller_coaster')) {
+      drawTrack(ctx, x, y, w, h);
+    } else if (key.includes('marina') || key.includes('pier')) {
+      drawPier(ctx, x, y, w, h);
     } else {
+      // Generic park tile.
       drawPark(ctx, x, y, w, h, rng);
     }
     ctx.restore();
@@ -821,9 +1031,9 @@ function drawProceduralSpriteTile(
 
   // Windows for taller buildings
   if (style.height >= 1.2) {
-    const winColor = spriteKey === 'hospital'
+    const winColor = key === 'hospital'
       ? '#ef4444'
-      : spriteKey === 'police_station'
+      : key === 'police_station'
         ? '#60a5fa'
         : '#f8fafc';
     drawWindows(ctx, bounds.right, rng, winColor);
@@ -855,8 +1065,8 @@ function drawProceduralSpriteTile(
   }
 
   // Utility extras
-  if (style.kind === 'utility' || spriteKey === 'power_plant' || spriteKey === 'water_tower') {
-    drawUtilityExtras(ctx, spriteKey, bounds, rng, style.accentColor || '#0f172a');
+  if (style.kind === 'utility' || key === 'power_plant' || key === 'water_tower' || prefix === 'station') {
+    drawUtilityExtras(ctx, key, bounds, rng, style.accentColor || '#0f172a');
   }
 
   // Variant overlays
@@ -874,24 +1084,31 @@ export function isProceduralSpritePack(pack: SpritePack): boolean {
   return !!(pack as any).procedural;
 }
 
-export function generateProceduralSpriteSheet(
-  pack: SpritePack,
-  variant: ProceduralSpriteSheetVariant
-): HTMLCanvasElement {
-  if (!isProceduralSpritePack(pack)) {
-    throw new Error(`Sprite pack ${pack.id} is not configured for procedural generation.`);
-  }
+type ProceduralPackConfig = { tileWidth: number; tileHeight: number; seed?: number };
 
-  const procedural = (pack as any).procedural as { tileWidth: number; tileHeight: number; seed?: number };
+function getProceduralConfig(pack: SpritePack): ProceduralPackConfig {
+  // Allow `src` values like `procedural:...` even if the pack forgot to set
+  // `pack.procedural`.
+  const cfg = (pack as any).procedural as ProceduralPackConfig | undefined;
+  return cfg ?? { tileWidth: 256, tileHeight: 213, seed: 0 };
+}
+
+function requireBrowser(): void {
+  if (typeof document === 'undefined') {
+    throw new Error('Procedural sprite generation requires a browser (document is undefined).');
+  }
+}
+
+function generateFromSpriteOrder(
+  pack: SpritePack,
+  variant: ProceduralSpriteSheetVariant,
+  procedural: ProceduralPackConfig
+): HTMLCanvasElement {
+  requireBrowser();
+
   const tileW = Math.max(16, Math.floor(procedural.tileWidth));
   const tileH = Math.max(16, Math.floor(procedural.tileHeight));
   const seed = procedural.seed ?? 0;
-
-  if (typeof document === 'undefined') {
-    // Should never happen in normal gameplay because this module is only called
-    // from client components.
-    throw new Error('Procedural sprite generation requires a browser (document is undefined).');
-  }
 
   const sheetW = tileW * pack.cols;
   const sheetH = tileH * pack.rows;
@@ -932,4 +1149,148 @@ export function generateProceduralSpriteSheet(
   }
 
   return canvas;
+}
+
+export function generateProceduralSpriteSheet(
+  pack: SpritePack,
+  variant: ProceduralSpriteSheetVariant
+): HTMLCanvasElement {
+  if (!isProceduralSpritePack(pack)) {
+    throw new Error(`Sprite pack ${pack.id} is not configured for procedural generation.`);
+  }
+
+  return generateFromSpriteOrder(pack, variant, getProceduralConfig(pack));
+}
+
+function generateFromCells(
+  pack: SpritePack,
+  kind: ProceduralSpriteSheetKind,
+  cols: number,
+  rows: number,
+  variant: ProceduralSpriteSheetVariant,
+  cells: Array<{ col: number; row: number; spriteKey: string; salt?: string }>
+): HTMLCanvasElement {
+  requireBrowser();
+
+  const procedural = getProceduralConfig(pack);
+  const tileW = Math.max(16, Math.floor(procedural.tileWidth));
+  const tileH = Math.max(16, Math.floor(procedural.tileHeight));
+  const seed = procedural.seed ?? 0;
+
+  const sheetW = tileW * cols;
+  const sheetH = tileH * rows;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = sheetW;
+  canvas.height = sheetH;
+
+  const ctx = canvas.getContext('2d', { alpha: true });
+  if (!ctx) return canvas;
+
+  ctx.imageSmoothingEnabled = false;
+  ctx.clearRect(0, 0, sheetW, sheetH);
+
+  for (const cell of cells) {
+    if (cell.col < 0 || cell.col >= cols || cell.row < 0 || cell.row >= rows) continue;
+    const cellX = cell.col * tileW;
+    const cellY = cell.row * tileH;
+    const salt = cell.salt ? `:${cell.salt}` : '';
+    const rng = mulberry32(hashStringToSeed(`${seed}:${pack.id}:${kind}:${variant}:${cell.spriteKey}${salt}`));
+    drawProceduralSpriteTile(ctx, cell.spriteKey, variant, cellX, cellY, tileW, tileH, rng);
+  }
+
+  return canvas;
+}
+
+/**
+ * Higher-level entrypoint used by the renderer.
+ *
+ * Supports generating *all* sprite-sheet kinds (dense/modern/parks/shops/etc.)
+ * for packs that provide the corresponding mappings.
+ */
+export function generateProceduralSpriteSheetForKind(
+  pack: SpritePack,
+  kind: ProceduralSpriteSheetKind
+): HTMLCanvasElement | null {
+  // "Main"-grid variants can use the spriteOrder layout.
+  if (kind === 'main' || kind === 'construction' || kind === 'abandoned') {
+    const variant: ProceduralSpriteSheetVariant = kind;
+    return generateFromSpriteOrder(pack, variant, getProceduralConfig(pack));
+  }
+
+  const variant: ProceduralSpriteSheetVariant = kind === 'parksConstruction' ? 'construction' : 'main';
+
+  if (kind === 'dense') {
+    if (!pack.denseVariants) return null;
+    const cells: Array<{ col: number; row: number; spriteKey: string; salt?: string }> = [];
+    for (const [buildingType, variants] of Object.entries(pack.denseVariants)) {
+      variants.forEach((pos, i) => {
+        cells.push({ col: pos.col, row: pos.row, spriteKey: `dense:${buildingType}`, salt: String(i) });
+      });
+    }
+    return generateFromCells(pack, kind, pack.cols, pack.rows, variant, cells);
+  }
+
+  if (kind === 'modern') {
+    if (!pack.modernVariants) return null;
+    const cells: Array<{ col: number; row: number; spriteKey: string; salt?: string }> = [];
+    for (const [buildingType, variants] of Object.entries(pack.modernVariants)) {
+      variants.forEach((pos, i) => {
+        cells.push({ col: pos.col, row: pos.row, spriteKey: `modern:${buildingType}`, salt: String(i) });
+      });
+    }
+    return generateFromCells(pack, kind, pack.cols, pack.rows, variant, cells);
+  }
+
+  if (kind === 'parks' || kind === 'parksConstruction') {
+    if (!pack.parksBuildings) return null;
+    const cols = pack.parksCols ?? pack.cols;
+    const rows = pack.parksRows ?? pack.rows;
+    const cells: Array<{ col: number; row: number; spriteKey: string }> = [];
+    for (const [buildingType, pos] of Object.entries(pack.parksBuildings)) {
+      cells.push({ col: pos.col, row: pos.row, spriteKey: `park:${buildingType}` });
+    }
+    return generateFromCells(pack, kind, cols, rows, variant, cells);
+  }
+
+  if (kind === 'farms') {
+    if (!pack.farmsVariants) return null;
+    const cols = pack.farmsCols ?? pack.cols;
+    const rows = pack.farmsRows ?? pack.rows;
+    const cells: Array<{ col: number; row: number; spriteKey: string; salt?: string }> = [];
+    for (const [buildingType, variants] of Object.entries(pack.farmsVariants)) {
+      variants.forEach((pos, i) => {
+        cells.push({ col: pos.col, row: pos.row, spriteKey: `farm:${buildingType}`, salt: String(i) });
+      });
+    }
+    return generateFromCells(pack, kind, cols, rows, variant, cells);
+  }
+
+  if (kind === 'shops') {
+    if (!pack.shopsVariants) return null;
+    const cols = pack.shopsCols ?? pack.cols;
+    const rows = pack.shopsRows ?? pack.rows;
+    const cells: Array<{ col: number; row: number; spriteKey: string; salt?: string }> = [];
+    for (const [buildingType, variants] of Object.entries(pack.shopsVariants)) {
+      variants.forEach((pos, i) => {
+        cells.push({ col: pos.col, row: pos.row, spriteKey: `shop:${buildingType}`, salt: String(i) });
+      });
+    }
+    return generateFromCells(pack, kind, cols, rows, variant, cells);
+  }
+
+  if (kind === 'stations') {
+    if (!pack.stationsVariants) return null;
+    const cols = pack.stationsCols ?? pack.cols;
+    const rows = pack.stationsRows ?? pack.rows;
+    const cells: Array<{ col: number; row: number; spriteKey: string; salt?: string }> = [];
+    for (const [buildingType, variants] of Object.entries(pack.stationsVariants)) {
+      variants.forEach((pos, i) => {
+        cells.push({ col: pos.col, row: pos.row, spriteKey: `station:${buildingType}`, salt: String(i) });
+      });
+    }
+    return generateFromCells(pack, kind, cols, rows, variant, cells);
+  }
+
+  return null;
 }

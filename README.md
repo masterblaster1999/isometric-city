@@ -54,13 +54,26 @@ IsoCity is a open-source isometric city-building simulation game built with **Ne
 
 ## Procedural Sprite Packs (Experimental)
 
-This project now includes an **experimental procedural sprite pack** that generates building sprites at runtime using the Canvas 2D API (no `.webp` / `.png` sprite sheet required for the pack).
+This project includes an **experimental procedural sprite pack** that generates sprite sheets at runtime using the Canvas 2D API (no `.webp` / `.png` required for that pack).
 
-- **Generator**: `src/lib/proceduralSpriteSheets.ts`
+- **Generator**: `src/lib/proceduralSpriteSheets.ts` (entrypoint: `generateProceduralSpriteSheetForKind(...)`)
 - **Pack config**: `SPRITE_PACK_PROCEDURAL_BASIC` in `src/lib/renderConfig.ts`
 - **Loading / registration**: `src/components/game/spriteSheetProvider.ts`
 
-To create your own procedural pack, copy `SPRITE_PACK_PROCEDURAL_BASIC`, change the `id`/`seed`, and then extend the generator in `proceduralSpriteSheets.ts` to draw your custom sprites for each `spriteKey`.
+The generator can now procedurally create **all** sheet kinds the renderer knows about (main / construction / abandoned / dense / modern / parks / farms / shops / stations) as long as your pack provides the corresponding mappings (variants, parksBuildings, etc.).
+
+To create your own procedural pack:
+
+1. Copy `SPRITE_PACK_PROCEDURAL_BASIC` and change the `id` + `procedural.seed`.
+2. Point the sheet sources at cache keys (for example `procedural:my-pack:main`).
+3. Extend `styleForSpriteKey(...)` / `drawProceduralSpriteTile(...)` in `src/lib/proceduralSpriteSheets.ts` to add new sprite keys or new park/farm/shop/station visuals.
+
+Tip: the generator uses lightweight prefixes internally (ex: `dense:apartment_high`, `park:basketball_courts`) to differentiate which kind of procedural art to draw.
+
+If you want to add *your own* procedural sprites without modifying the core generator, use the extension registry:
+
+- `src/lib/proceduralSpriteExtensions.ts` → `registerProceduralPrefixRenderer('my', ...)`
+- Then reference sprites as `my:your_sprite_key` from a SpritePack.
 
 
 ## Contributing
