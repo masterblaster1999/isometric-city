@@ -790,9 +790,11 @@ export function getSpriteCoords(
   buildingType: string,
   spriteSheetWidth: number,
   spriteSheetHeight: number,
-  pack?: SpritePack
+  pack?: SpritePack,
+  options?: { proceduralSheet?: boolean }
 ): { sx: number; sy: number; sw: number; sh: number } | null {
   const activePack = pack || _activeSpritePack;
+  const proceduralSheet = options?.proceduralSheet === true;
   
   // First, map building type to sprite key
   const spriteKey = activePack.buildingToSprite[buildingType];
@@ -821,7 +823,7 @@ export function getSpriteCoords(
   // This applies to sprites4 and all its themed variants (harry, china, etc.)
   const isSprites4Based = activePack.id.startsWith('sprites4');
   let sy = row * tileHeight;
-  if (isSprites4Based && row > 0 && row <= 4) {
+  if (isSprites4Based && !proceduralSheet && row > 0 && row <= 4) {
     if (row <= 2) {
       // Rows 1-2: small cumulative shift
       const overlapAmount = tileHeight * 0.1;
@@ -838,7 +840,7 @@ export function getSpriteCoords(
   
   // Special handling for sprites4-based packs: adjust source height for certain sprites
   let sh = tileHeight;
-  if (isSprites4Based) {
+  if (isSprites4Based && !proceduralSheet) {
     if (spriteKey === 'residential' || spriteKey === 'commercial') {
       sh = tileHeight * 1.1; // Add 10% more height at bottom
     }

@@ -12,6 +12,11 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { SpriteTestPanel } from './SpriteTestPanel';
 import { SavedCityMeta } from '@/types/game';
+import {
+  getProceduralAssetsMode,
+  setProceduralAssetsModeOverride,
+  type ProceduralAssetsMode,
+} from '@/lib/proceduralAssetsMode';
 
 // Format a date for display
 function formatDate(timestamp: number): string {
@@ -54,6 +59,7 @@ export function SettingsPanel() {
   const [exportCopied, setExportCopied] = useState(false);
   const [importError, setImportError] = useState(false);
   const [importSuccess, setImportSuccess] = useState(false);
+  const [proceduralAssetsMode, setProceduralAssetsMode] = useState<ProceduralAssetsMode>(() => getProceduralAssetsMode());
   const [savedCityInfo, setSavedCityInfo] = useState(getSavedCityInfo());
   
   // Refresh saved city info when panel opens
@@ -195,6 +201,32 @@ export function SettingsPanel() {
                 ))}
               </div>
             </div>
+            <div className="py-2">
+              <Label>Sprite Sheet Source</Label>
+              <p className="text-muted-foreground text-xs mb-2">Choose between image assets and procedurally generated sheets</p>
+              <div className="flex rounded-md border border-border overflow-hidden">
+                {(['off', 'fallback', 'force'] as ProceduralAssetsMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => {
+                      // Persist override in localStorage and reload so sheets are rebuilt.
+                      setProceduralAssetsModeOverride(mode);
+                      setProceduralAssetsMode(mode);
+                      window.location.reload();
+                    }}
+                    className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
+                      proceduralAssetsMode === mode
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-background hover:bg-muted/50'
+                    }`}
+                  >
+                    {mode === 'off' ? 'Files' : mode === 'fallback' ? 'Fallback' : 'Force'}
+                  </button>
+                ))}
+              </div>
+              <p className="text-muted-foreground text-[10px] mt-1">Files: always use images • Fallback: generate if missing • Force: always generate</p>
+            </div>
+
           </div>
           
           <div>

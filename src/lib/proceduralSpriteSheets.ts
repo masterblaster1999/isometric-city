@@ -918,6 +918,8 @@ function drawUtilityExtras(
 
 function drawProceduralSpriteTile(
   ctx: CanvasRenderingContext2D,
+  pack: SpritePack,
+  sheetKind: ProceduralSpriteSheetKind,
   spriteKey: string,
   variant: ProceduralSpriteSheetVariant,
   x: number,
@@ -933,9 +935,9 @@ function drawProceduralSpriteTile(
 
   // Extension point (exact key): allow custom renderers to fully handle a specific sprite.
   // This lets you override built-in procedural sprites without editing `spriteOrder`.
-  const exact = getProceduralSpriteRenderer(spriteKey);
+  const exact = getProceduralSpriteRenderer(spriteKey, pack.id);
   if (exact) {
-    const handled = exact({ spriteKey, prefix: prefix ?? '', key, variant, ctx, x, y, w, h, rng });
+    const handled = exact({ pack, sheetKind, spriteKey, prefix: prefix ?? '', key, variant, ctx, x, y, w, h, rng });
     if (handled === true) {
       ctx.restore();
       return;
@@ -944,9 +946,9 @@ function drawProceduralSpriteTile(
 
   // Extension point (prefix): allow custom prefix renderers to fully handle a cell.
   if (prefix) {
-    const ext = getProceduralPrefixRenderer(prefix);
+    const ext = getProceduralPrefixRenderer(prefix, pack.id);
     if (ext) {
-      const handled = ext({ spriteKey, prefix, key, variant, ctx, x, y, w, h, rng });
+      const handled = ext({ pack, sheetKind, spriteKey, prefix, key, variant, ctx, x, y, w, h, rng });
       if (handled === true) {
         ctx.restore();
         return;
@@ -956,9 +958,9 @@ function drawProceduralSpriteTile(
 
   // If we had a prefix, also allow an override renderer registered for the base key.
   if (prefix) {
-    const base = getProceduralSpriteRenderer(key);
+    const base = getProceduralSpriteRenderer(key, pack.id);
     if (base) {
-      const handled = base({ spriteKey, prefix, key, variant, ctx, x, y, w, h, rng });
+      const handled = base({ pack, sheetKind, spriteKey, prefix, key, variant, ctx, x, y, w, h, rng });
       if (handled === true) {
         ctx.restore();
         return;
@@ -1123,6 +1125,7 @@ function requireBrowser(): void {
 
 function generateFromSpriteOrder(
   pack: SpritePack,
+  kind: ProceduralSpriteSheetKind,
   variant: ProceduralSpriteSheetVariant,
   procedural: ProceduralPackConfig
 ): HTMLCanvasElement {
@@ -1167,7 +1170,7 @@ function generateFromSpriteOrder(
     const cellY = row * tileH;
 
     const rng = mulberry32(hashStringToSeed(`${seed}:${pack.id}:${variant}:${spriteKey}`));
-    drawProceduralSpriteTile(ctx, spriteKey, variant, cellX, cellY, tileW, tileH, rng);
+    drawProceduralSpriteTile(ctx, pack, kind, spriteKey, variant, cellX, cellY, tileW, tileH, rng);
   }
 
   return canvas;
@@ -1181,7 +1184,7 @@ export function generateProceduralSpriteSheet(
     throw new Error(`Sprite pack ${pack.id} is not configured for procedural generation.`);
   }
 
-  return generateFromSpriteOrder(pack, variant, getProceduralConfig(pack));
+  return generateFromSpriteOrder(pack, variant, variant, getProceduralConfig(pack));
 }
 
 function generateFromCells(
@@ -1218,7 +1221,7 @@ function generateFromCells(
     const cellY = cell.row * tileH;
     const salt = cell.salt ? `:${cell.salt}` : '';
     const rng = mulberry32(hashStringToSeed(`${seed}:${pack.id}:${kind}:${variant}:${cell.spriteKey}${salt}`));
-    drawProceduralSpriteTile(ctx, cell.spriteKey, variant, cellX, cellY, tileW, tileH, rng);
+    drawProceduralSpriteTile(ctx, pack, kind, cell.spriteKey, variant, cellX, cellY, tileW, tileH, rng);
   }
 
   return canvas;
@@ -1237,7 +1240,7 @@ export function generateProceduralSpriteSheetForKind(
   // "Main"-grid variants can use the spriteOrder layout.
   if (kind === 'main' || kind === 'construction' || kind === 'abandoned') {
     const variant: ProceduralSpriteSheetVariant = kind;
-    return generateFromSpriteOrder(pack, variant, getProceduralConfig(pack));
+    return generateFromSpriteOrder(pack, kind, variant, getProceduralConfig(pack));
   }
 
   const variant: ProceduralSpriteSheetVariant = kind === 'parksConstruction' ? 'construction' : 'main';

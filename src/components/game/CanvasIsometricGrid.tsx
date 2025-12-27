@@ -2386,7 +2386,16 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             let isShopVariant = false;
             let isStationVariant = false;
             let isParksBuilding = false;
-            const isProceduralPack = !!activePack.procedural || (activePack.src?.startsWith('procedural:') ?? false);
+            const isFileSpriteSheet = filteredSpriteSheet instanceof HTMLImageElement;
+            // When we generate a sprite sheet procedurally (procedural packs, or force/fallback modes),
+            // we should NOT apply file-sheet bleed/cropping hacks or sprite-specific tuning offsets.
+            //
+            // `allowPackTuning` is true for:
+            // - file-based sheets (HTMLImageElement)
+            // - explicit procedural packs (activePack.procedural)
+            // - procedural cache keys (procedural:...)
+            const allowPackTuning =
+              isFileSpriteSheet || !!activePack.procedural || (spriteSource?.startsWith('procedural:') ?? false);
             if (useParksBuilding) {
               isParksBuilding = true;
               // Calculate coordinates from parks sprite sheet using its own grid dimensions
@@ -2399,7 +2408,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
 
               // File-based sprite sheets contain artwork that bleeds across cell boundaries.
               // Procedural sheets do not need these per-row cropping hacks.
-              if (!isProceduralPack) {
+              if (isFileSpriteSheet) {
               
               // Special handling for buildings that have content bleeding from row above - shift source down to avoid capturing
               // content from the sprite above it in the sprite sheet
@@ -2443,7 +2452,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               const tileHeight = Math.floor(sheetHeight / activePack.rows);
               let sourceY = useDenseVariant.row * tileHeight;
               let sourceH = tileHeight;
-              if (!isProceduralPack) {
+              if (isFileSpriteSheet) {
                 // File sheet fixes: avoid capturing bleed from neighboring rows.
                 if (buildingType === 'mall') {
                   sourceY += tileHeight * 0.12; // Shift down ~12% to avoid row above
@@ -2469,7 +2478,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               const tileHeight = Math.floor(sheetHeight / activePack.rows);
               let sourceY = useModernVariant.row * tileHeight;
               let sourceH = tileHeight;
-              if (!isProceduralPack) {
+              if (isFileSpriteSheet) {
                 // File sheet fixes: avoid capturing bleed from neighboring rows.
                 if (buildingType === 'mall') {
                   sourceY += tileHeight * 0.15; // Shift down ~15% to avoid row above
@@ -2530,7 +2539,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               let sourceY = useStationVariant.row * tileHeight;
               let sourceH = tileHeight;
 
-              if (!isProceduralPack) {
+              if (isFileSpriteSheet) {
                 // File sheet fixes: avoid capturing bleed from neighboring rows.
                 // Third row (row 2, 0-indexed) - shift down to avoid capturing content from row above
                 if (useStationVariant.row === 2) {
@@ -2556,9 +2565,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               };
             } else {
               // getSpriteCoords handles building type to sprite key mapping
-              coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight);
+              coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight, activePack, { proceduralSheet: !isFileSpriteSheet });
               
-              if (!isProceduralPack) {
+              if (isFileSpriteSheet) {
                 // File sheet fix: crop bottom to remove bleed from assets below.
                 if (buildingType === 'factory_large' && coords) {
                   const tileHeight = Math.floor(sheetHeight / activePack.rows);
@@ -2592,7 +2601,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               // Scale factor: 1.2 base (reduced from 1.5 for ~20% smaller)
               // Multi-tile buildings scale with their footprint
               let scaleMultiplier = isMultiTile ? Math.max(buildingSize.width, buildingSize.height) : 1;
-              if (!isProceduralPack) {
+              if (isFileSpriteSheet) {
               // Special scale adjustment for airport (no scaling - was scaled up 5%, now scaled down 5%)
               if (buildingType === 'airport') {
                 scaleMultiplier *= 1.0; // Scale down 5% from previous 1.05
@@ -2658,35 +2667,35 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               }
               }
               // Apply dense-specific scale if building uses dense variant and has custom scale in config
-              if (isDenseVariant && activePack.denseScales && buildingType in activePack.denseScales) {
+              if (allowPackTuning && isDenseVariant && activePack.denseScales && buildingType in activePack.denseScales) {
                 scaleMultiplier *= activePack.denseScales[buildingType];
               }
               // Apply modern-specific scale if building uses modern variant and has custom scale in config
-              if (isModernVariant && activePack.modernScales && buildingType in activePack.modernScales) {
+              if (allowPackTuning && isModernVariant && activePack.modernScales && buildingType in activePack.modernScales) {
                 scaleMultiplier *= activePack.modernScales[buildingType];
               }
               // Apply farm-specific scale if building uses farm variant and has custom scale in config
-              if (isFarmVariant && activePack.farmsScales && buildingType in activePack.farmsScales) {
+              if (allowPackTuning && isFarmVariant && activePack.farmsScales && buildingType in activePack.farmsScales) {
                 scaleMultiplier *= activePack.farmsScales[buildingType];
               }
               // Apply shop-specific scale if building uses shop variant and has custom scale in config
-              if (isShopVariant && activePack.shopsScales && buildingType in activePack.shopsScales) {
+              if (allowPackTuning && isShopVariant && activePack.shopsScales && buildingType in activePack.shopsScales) {
                 scaleMultiplier *= activePack.shopsScales[buildingType];
               }
               // Apply station-specific scale if building uses station variant and has custom scale in config
-              if (isStationVariant && activePack.stationsScales && buildingType in activePack.stationsScales) {
+              if (allowPackTuning && isStationVariant && activePack.stationsScales && buildingType in activePack.stationsScales) {
                 scaleMultiplier *= activePack.stationsScales[buildingType];
               }
               // Apply parks-specific scale if building is from parks sheet and has custom scale in config
-              if (isParksBuilding && activePack.parksScales && buildingType in activePack.parksScales) {
+              if (allowPackTuning && isParksBuilding && activePack.parksScales && buildingType in activePack.parksScales) {
                 scaleMultiplier *= activePack.parksScales[buildingType];
               }
               // Apply construction-specific scale if building is in construction phase (phase 2) and has custom scale
-              if (isConstructionPhase && activePack.constructionScales && buildingType in activePack.constructionScales) {
+              if (allowPackTuning && isConstructionPhase && activePack.constructionScales && buildingType in activePack.constructionScales) {
                 scaleMultiplier *= activePack.constructionScales[buildingType];
               }
               // Apply abandoned-specific scale if building is abandoned and has custom scale
-              if (isAbandoned && activePack.abandonedScales && buildingType in activePack.abandonedScales) {
+              if (allowPackTuning && isAbandoned && activePack.abandonedScales && buildingType in activePack.abandonedScales) {
                 scaleMultiplier *= activePack.abandonedScales[buildingType];
               }
               // Apply global scale from sprite pack if available
@@ -2700,22 +2709,25 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               
               // Apply per-sprite horizontal offset adjustments
               const spriteKey = BUILDING_TO_SPRITE[buildingType];
-              let horizontalOffset = (spriteKey && SPRITE_HORIZONTAL_OFFSETS[spriteKey]) ? SPRITE_HORIZONTAL_OFFSETS[spriteKey] * w : 0;
-              // Apply parks-specific horizontal offset if available
-              if (isParksBuilding && activePack.parksHorizontalOffsets && buildingType in activePack.parksHorizontalOffsets) {
-                horizontalOffset = activePack.parksHorizontalOffsets[buildingType] * w;
-              }
-              // Apply farm-specific horizontal offset if available
-              if (isFarmVariant && activePack.farmsHorizontalOffsets && buildingType in activePack.farmsHorizontalOffsets) {
-                horizontalOffset = activePack.farmsHorizontalOffsets[buildingType] * w;
-              }
-              // Apply shop-specific horizontal offset if available
-              if (isShopVariant && activePack.shopsHorizontalOffsets && buildingType in activePack.shopsHorizontalOffsets) {
-                horizontalOffset = activePack.shopsHorizontalOffsets[buildingType] * w;
-              }
-              // Apply station-specific horizontal offset if available
-              if (isStationVariant && activePack.stationsHorizontalOffsets && buildingType in activePack.stationsHorizontalOffsets) {
-                horizontalOffset = activePack.stationsHorizontalOffsets[buildingType] * w;
+              let horizontalOffset = 0;
+              if (allowPackTuning) {
+                horizontalOffset = (spriteKey && SPRITE_HORIZONTAL_OFFSETS[spriteKey]) ? SPRITE_HORIZONTAL_OFFSETS[spriteKey] * w : 0;
+                // Apply parks-specific horizontal offset if available
+                if (isParksBuilding && activePack.parksHorizontalOffsets && buildingType in activePack.parksHorizontalOffsets) {
+                  horizontalOffset = activePack.parksHorizontalOffsets[buildingType] * w;
+                }
+                // Apply farm-specific horizontal offset if available
+                if (isFarmVariant && activePack.farmsHorizontalOffsets && buildingType in activePack.farmsHorizontalOffsets) {
+                  horizontalOffset = activePack.farmsHorizontalOffsets[buildingType] * w;
+                }
+                // Apply shop-specific horizontal offset if available
+                if (isShopVariant && activePack.shopsHorizontalOffsets && buildingType in activePack.shopsHorizontalOffsets) {
+                  horizontalOffset = activePack.shopsHorizontalOffsets[buildingType] * w;
+                }
+                // Apply station-specific horizontal offset if available
+                if (isStationVariant && activePack.stationsHorizontalOffsets && buildingType in activePack.stationsHorizontalOffsets) {
+                  horizontalOffset = activePack.stationsHorizontalOffsets[buildingType] * w;
+                }
               }
               drawX += horizontalOffset;
               
@@ -2734,43 +2746,45 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               // Use state-specific offset if available, then fall back to building-type or sprite-key offsets
               // Priority: parks-construction > construction > abandoned > parks > dense > building-type > sprite-key
               let extraOffset = 0;
-              if (isConstructionPhase && isParksBuilding && activePack.parksConstructionVerticalOffsets && buildingType in activePack.parksConstructionVerticalOffsets) {
-                // Parks building in construction phase (phase 2) - use parks construction offset
-                extraOffset = activePack.parksConstructionVerticalOffsets[buildingType] * h;
-              } else if (isConstructionPhase && activePack.constructionVerticalOffsets && buildingType in activePack.constructionVerticalOffsets) {
-                // Regular building in construction phase (phase 2) - use construction offset
-                extraOffset = activePack.constructionVerticalOffsets[buildingType] * h;
-              } else if (isAbandoned && activePack.abandonedVerticalOffsets && buildingType in activePack.abandonedVerticalOffsets) {
-                // Abandoned buildings may need different positioning than normal
-                extraOffset = activePack.abandonedVerticalOffsets[buildingType] * h;
-              } else if (isParksBuilding && activePack.parksVerticalOffsets && buildingType in activePack.parksVerticalOffsets) {
-                // Parks buildings may need specific positioning
-                extraOffset = activePack.parksVerticalOffsets[buildingType] * h;
-              } else if (isDenseVariant && activePack.denseVerticalOffsets && buildingType in activePack.denseVerticalOffsets) {
-                // Dense variants may need different positioning than normal
-                extraOffset = activePack.denseVerticalOffsets[buildingType] * h;
-              } else if (isModernVariant && activePack.modernVerticalOffsets && buildingType in activePack.modernVerticalOffsets) {
-                // Modern variants may need different positioning than normal
-                extraOffset = activePack.modernVerticalOffsets[buildingType] * h;
-              } else if (isFarmVariant && activePack.farmsVerticalOffsets && buildingType in activePack.farmsVerticalOffsets) {
-                // Farm variants may need different positioning than normal
-                extraOffset = activePack.farmsVerticalOffsets[buildingType] * h;
-              } else if (isShopVariant && activePack.shopsVerticalOffsets && buildingType in activePack.shopsVerticalOffsets) {
-                // Shop variants may need different positioning than normal
-                extraOffset = activePack.shopsVerticalOffsets[buildingType] * h;
-              } else if (isStationVariant && activePack.stationsVerticalOffsets && buildingType in activePack.stationsVerticalOffsets) {
-                // Station variants may need different positioning than normal
-                extraOffset = activePack.stationsVerticalOffsets[buildingType] * h;
-              } else if (activePack.buildingVerticalOffsets && buildingType in activePack.buildingVerticalOffsets) {
-                // Building-type-specific offset (for buildings sharing sprites but needing different positioning)
-                extraOffset = activePack.buildingVerticalOffsets[buildingType] * h;
-              } else if (spriteKey && SPRITE_VERTICAL_OFFSETS[spriteKey]) {
-                extraOffset = SPRITE_VERTICAL_OFFSETS[spriteKey] * h;
-              }
-              if (!isProceduralPack) {
-                // Special vertical offset adjustment for hospital (sprite-sheet art alignment)
-                if (buildingType === 'hospital') {
-                  extraOffset -= 0.1 * h;
+              if (allowPackTuning) {
+                if (isConstructionPhase && isParksBuilding && activePack.parksConstructionVerticalOffsets && buildingType in activePack.parksConstructionVerticalOffsets) {
+                  // Parks building in construction phase (phase 2) - use parks construction offset
+                  extraOffset = activePack.parksConstructionVerticalOffsets[buildingType] * h;
+                } else if (isConstructionPhase && activePack.constructionVerticalOffsets && buildingType in activePack.constructionVerticalOffsets) {
+                  // Regular building in construction phase (phase 2) - use construction offset
+                  extraOffset = activePack.constructionVerticalOffsets[buildingType] * h;
+                } else if (isAbandoned && activePack.abandonedVerticalOffsets && buildingType in activePack.abandonedVerticalOffsets) {
+                  // Abandoned buildings may need different positioning than normal
+                  extraOffset = activePack.abandonedVerticalOffsets[buildingType] * h;
+                } else if (isParksBuilding && activePack.parksVerticalOffsets && buildingType in activePack.parksVerticalOffsets) {
+                  // Parks buildings may need specific positioning
+                  extraOffset = activePack.parksVerticalOffsets[buildingType] * h;
+                } else if (isDenseVariant && activePack.denseVerticalOffsets && buildingType in activePack.denseVerticalOffsets) {
+                  // Dense variants may need different positioning than normal
+                  extraOffset = activePack.denseVerticalOffsets[buildingType] * h;
+                } else if (isModernVariant && activePack.modernVerticalOffsets && buildingType in activePack.modernVerticalOffsets) {
+                  // Modern variants may need different positioning than normal
+                  extraOffset = activePack.modernVerticalOffsets[buildingType] * h;
+                } else if (isFarmVariant && activePack.farmsVerticalOffsets && buildingType in activePack.farmsVerticalOffsets) {
+                  // Farm variants may need different positioning than normal
+                  extraOffset = activePack.farmsVerticalOffsets[buildingType] * h;
+                } else if (isShopVariant && activePack.shopsVerticalOffsets && buildingType in activePack.shopsVerticalOffsets) {
+                  // Shop variants may need different positioning than normal
+                  extraOffset = activePack.shopsVerticalOffsets[buildingType] * h;
+                } else if (isStationVariant && activePack.stationsVerticalOffsets && buildingType in activePack.stationsVerticalOffsets) {
+                  // Station variants may need different positioning than normal
+                  extraOffset = activePack.stationsVerticalOffsets[buildingType] * h;
+                } else if (activePack.buildingVerticalOffsets && buildingType in activePack.buildingVerticalOffsets) {
+                  // Building-type-specific offset (for buildings sharing sprites but needing different positioning)
+                  extraOffset = activePack.buildingVerticalOffsets[buildingType] * h;
+                } else if (spriteKey && SPRITE_VERTICAL_OFFSETS[spriteKey]) {
+                  extraOffset = SPRITE_VERTICAL_OFFSETS[spriteKey] * h;
+                }
+                if (isFileSpriteSheet) {
+                  // Special vertical offset adjustment for hospital (sprite-sheet art alignment)
+                  if (buildingType === 'hospital') {
+                    extraOffset -= 0.1 * h;
+                  }
                 }
               }
               verticalPush += extraOffset;

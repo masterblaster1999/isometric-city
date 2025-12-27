@@ -135,6 +135,7 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
     
     let itemsToRender: Array<{ label: string; coords: { sx: number; sy: number; sw: number; sh: number }; index?: number }> = [];
     const { width: sheetWidth, height: sheetHeight } = getImageSourceDimensions(spriteSheet);
+      const isProceduralSheet = !(spriteSheet instanceof HTMLImageElement);
     let sheetCols = currentSpritePack.cols;
     let sheetRows = currentSpritePack.rows;
     
@@ -144,7 +145,7 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
         const buildingType = Object.entries(currentSpritePack.buildingToSprite).find(
           ([, value]) => value === spriteKey
         )?.[0] || spriteKey;
-        const coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight, currentSpritePack);
+        const coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight, currentSpritePack, { proceduralSheet: isProceduralSheet });
         if (coords) {
           itemsToRender.push({ label: spriteKey, coords, index });
         }
@@ -155,7 +156,7 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
         const buildingType = Object.entries(currentSpritePack.buildingToSprite).find(
           ([, value]) => value === spriteKey
         )?.[0] || spriteKey;
-        const coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight, currentSpritePack);
+        const coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight, currentSpritePack, { proceduralSheet: isProceduralSheet });
         if (coords) {
           itemsToRender.push({ label: `${spriteKey} (construction)`, coords, index });
         }
@@ -166,7 +167,7 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
         const buildingType = Object.entries(currentSpritePack.buildingToSprite).find(
           ([, value]) => value === spriteKey
         )?.[0] || spriteKey;
-        const coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight, currentSpritePack);
+        const coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight, currentSpritePack, { proceduralSheet: isProceduralSheet });
         if (coords) {
           itemsToRender.push({ label: `${spriteKey} (abandoned)`, coords, index });
         }

@@ -61,6 +61,16 @@ This project includes an **experimental procedural sprite pack** that generates 
 - **Loading / registration**: `src/components/game/spriteSheetProvider.ts`
 
 The generator can now procedurally create **all** sheet kinds the renderer knows about (main / construction / abandoned / dense / modern / parks / farms / shops / stations) as long as your pack provides the corresponding mappings (variants, parksBuildings, etc.).
+### Procedural asset modes
+
+You can also control procedural generation globally (even for the file-based packs) using an environment variable:
+
+- `NEXT_PUBLIC_PROCEDURAL_ASSETS_MODE=off` (default) → always load sprite sheets from files
+- `NEXT_PUBLIC_PROCEDURAL_ASSETS_MODE=fallback` → try files, but generate procedural sheets if loading fails (handy if you remove `.webp`/`.png` assets)
+- `NEXT_PUBLIC_PROCEDURAL_ASSETS_MODE=force` → always generate procedural sheets (useful for “no-art-assets” deployments)
+
+This behavior is implemented in `src/components/game/spriteSheetProvider.ts`.
+
 
 To create your own procedural pack:
 
@@ -76,6 +86,16 @@ If you want to add *your own* procedural sprites without modifying the core gene
 - Then reference sprites as `my:your_sprite_key` from a SpritePack.
 
 - Or override an existing key directly (no prefix required): `registerProceduralSpriteRenderer('house_small', ...)`
+
+- For pack-scoped overrides (recommended when you add a new procedural pack):
+  - `registerProceduralSpriteRendererForPack('procedural-user', 'house_small', ...)`
+
+- You can also insert brand-new procedural packs into the Settings UI at runtime:
+  - `registerProceduralSpritePack('sprites4', { id: 'procedural-user', name: 'Procedural (User)', seed: 123 })`
+  - See `src/lib/spritePackRegistry.ts` and the default implementation in `src/lib/proceduralUserAssets.ts`
+
+- Settings UI: you can toggle between file assets and procedural generation under **Sprite Sheet Source** (uses localStorage override).
+
 - A convenient place to register project-specific sprites is `src/lib/proceduralUserAssets.ts` (called once from `src/components/Game.tsx`)
 
 
