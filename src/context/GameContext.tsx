@@ -2,6 +2,9 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useState, useRef } from 'react';
+import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
+import { serializeAndCompressAsync } from '@/lib/saveWorkerManager';
+import { simulateTick } from '@/lib/simulation';
 import {
   Budget,
   BuildingType,
@@ -21,7 +24,6 @@ import {
   placeSubway,
   placeWaterTerraform,
   placeLandTerraform,
-  simulateTick,
   checkForDiscoverableCities,
   generateRandomAdvancedCity,
   createBridgesOnPath,
@@ -53,6 +55,9 @@ export type SavedCityInfo = {
 
 type GameContextValue = {
   state: GameState;
+  // PERF: Ref to latest state for real-time access without React re-renders
+  // Canvas should use this instead of state.grid for smooth updates
+  latestStateRef: React.RefObject<GameState>;
   setTool: (tool: Tool) => void;
   setSpeed: (speed: 0 | 1 | 2 | 3) => void;
   setTaxRate: (rate: number) => void;
@@ -161,12 +166,31 @@ const toolZoneMap: Partial<Record<Tool, ZoneType>> = {
 };
 
 // Load game state from localStorage
+// Supports both compressed (lz-string) and uncompressed (legacy) formats
 function loadGameState(): GameState | null {
   if (typeof window === 'undefined') return null;
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
-      const parsed = JSON.parse(saved);
+      // Try to decompress first (new format)
+      // If it fails or returns null/garbage, fall back to parsing as plain JSON (legacy format)
+      let jsonString = decompressFromUTF16(saved);
+      
+      // Check if decompression returned valid-looking JSON (should start with '{')
+      // lz-string can return garbage strings when given invalid input
+      if (!jsonString || !jsonString.startsWith('{')) {
+        // Check if the saved string itself looks like JSON (legacy uncompressed format)
+        if (saved.startsWith('{')) {
+          jsonString = saved;
+        } else {
+          // Data is corrupted - clear it and return null
+          console.error('Corrupted save data detected, clearing...');
+          localStorage.removeItem(STORAGE_KEY);
+          return null;
+        }
+      }
+      
+      const parsed = JSON.parse(jsonString);
       // Validate it has essential properties
       if (parsed && 
           parsed.grid && 
@@ -274,32 +298,97 @@ function loadGameState(): GameState | null {
   return null;
 }
 
-// Save game state to localStorage
-function saveGameState(state: GameState): void {
-  if (typeof window === 'undefined') return;
-  try {
-    // Validate state before saving
-    if (!state || !state.grid || !state.gridSize || !state.stats) {
-      console.error('Invalid game state, cannot save', { state, hasGrid: !!state?.grid, hasGridSize: !!state?.gridSize, hasStats: !!state?.stats });
-      return;
-    }
-    
-    const serialized = JSON.stringify(state);
-    
-    // Check if data is too large (localStorage has ~5-10MB limit)
-    if (serialized.length > 5 * 1024 * 1024) {
-      return;
-    }
-    
-    localStorage.setItem(STORAGE_KEY, serialized);
-  } catch (e) {
-    // Handle quota exceeded errors
-    if (e instanceof DOMException && (e.code === 22 || e.code === 1014)) {
-      console.error('localStorage quota exceeded, cannot save game state');
-    } else {
-      console.error('Failed to save game state:', e);
-    }
+// Optimize game state for saving by removing unnecessary/transient data
+function optimizeStateForSave(state: GameState): GameState {
+  // Create a shallow copy to avoid mutating the original
+  const optimized = { ...state };
+  
+  // Clear notifications (they're transient)
+  optimized.notifications = [];
+  
+  // Clear advisor messages (they're regenerated each tick)
+  optimized.advisorMessages = [];
+  
+  // Limit history to last 50 entries (instead of 100)
+  if (optimized.history && optimized.history.length > 50) {
+    optimized.history = optimized.history.slice(-50);
   }
+  
+  return optimized;
+}
+
+// Try to free up localStorage space by clearing old/unused data
+function tryFreeLocalStorageSpace(): void {
+  try {
+    // Clear any old saved city restore data
+    localStorage.removeItem(SAVED_CITY_STORAGE_KEY);
+    
+    // Clear sprite test data if any
+    localStorage.removeItem('isocity_sprite_test');
+    
+    // Clear any other temporary keys
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('isocity_temp_')) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+  } catch (e) {
+    console.error('Failed to free localStorage space:', e);
+  }
+}
+
+// Save game state to localStorage with lz-string compression
+// Compression typically reduces size by 60-80%, allowing much larger cities
+// PERF: Uses Web Worker for BOTH serialization and compression - no main thread blocking!
+async function saveGameStateAsync(state: GameState): Promise<void> {
+  if (typeof window === 'undefined') return;
+  
+  // Validate state before saving
+  if (!state || !state.grid || !state.gridSize || !state.stats) {
+    console.error('Invalid game state, cannot save', { state, hasGrid: !!state?.grid, hasGridSize: !!state?.gridSize, hasStats: !!state?.stats });
+    return;
+  }
+  
+  try {
+    // Step 1: Optimize state (fast, stays on main thread)
+    const optimizedState = optimizeStateForSave(state);
+    
+    // Step 2: Serialize + Compress using Web Worker (BOTH operations off main thread!)
+    const compressed = await serializeAndCompressAsync(optimizedState);
+    
+    // Check size limit
+    if (compressed.length > 5 * 1024 * 1024) {
+      console.error('Compressed game state too large to save:', compressed.length, 'chars');
+      return;
+    }
+    
+    // Step 3: Write to localStorage (fast)
+    try {
+      localStorage.setItem(STORAGE_KEY, compressed);
+    } catch (quotaError) {
+      if (quotaError instanceof DOMException && (quotaError.code === 22 || quotaError.code === 1014)) {
+        console.warn('localStorage quota exceeded, trying to free space...');
+        tryFreeLocalStorageSpace();
+        try {
+          localStorage.setItem(STORAGE_KEY, compressed);
+        } catch {
+          console.error('localStorage still full after cleanup');
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Failed to save game state:', e);
+  }
+}
+
+// Wrapper that takes a callback for compatibility with existing code
+function saveGameState(state: GameState, callback?: () => void): void {
+  saveGameStateAsync(state).finally(() => {
+    callback?.();
+  });
 }
 
 // Clear saved game state
@@ -373,9 +462,25 @@ function saveCityForRestore(state: GameState): void {
         savedAt: Date.now(),
       },
     };
-    localStorage.setItem(SAVED_CITY_STORAGE_KEY, JSON.stringify(savedData));
+    const compressed = compressToUTF16(JSON.stringify(savedData));
+    localStorage.setItem(SAVED_CITY_STORAGE_KEY, compressed);
   } catch (e) {
     console.error('Failed to save city for restore:', e);
+  }
+}
+
+// Helper to decompress saved city data (supports both compressed and legacy formats)
+function decompressSavedCity(saved: string): { state?: GameState; info?: SavedCityInfo } | null {
+  // Try to decompress first (new format)
+  let jsonString = decompressFromUTF16(saved);
+  if (!jsonString) {
+    // Legacy uncompressed format
+    jsonString = saved;
+  }
+  try {
+    return JSON.parse(jsonString);
+  } catch {
+    return null;
   }
 }
 
@@ -385,8 +490,8 @@ function loadSavedCityInfo(): SavedCityInfo {
   try {
     const saved = localStorage.getItem(SAVED_CITY_STORAGE_KEY);
     if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.info) {
+      const parsed = decompressSavedCity(saved);
+      if (parsed?.info) {
         return parsed.info as SavedCityInfo;
       }
     }
@@ -402,8 +507,8 @@ function loadSavedCityState(): GameState | null {
   try {
     const saved = localStorage.getItem(SAVED_CITY_STORAGE_KEY);
     if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.state && parsed.state.grid && parsed.state.gridSize && parsed.state.stats) {
+      const parsed = decompressSavedCity(saved);
+      if (parsed?.state && parsed.state.grid && parsed.state.gridSize && parsed.state.stats) {
         return parsed.state as GameState;
       }
     }
@@ -463,17 +568,21 @@ function saveSavedCitiesIndex(cities: SavedCityMeta[]): void {
   }
 }
 
-// Save a city state to localStorage
-function saveCityState(cityId: string, state: GameState): void {
+// Save a city state to localStorage with compression
+// PERF: Uses Web Worker for BOTH serialization and compression - no main thread blocking!
+async function saveCityStateAsync(cityId: string, state: GameState): Promise<void> {
   if (typeof window === 'undefined') return;
+  
   try {
-    const serialized = JSON.stringify(state);
-    // Check if data is too large
-    if (serialized.length > 5 * 1024 * 1024) {
-      console.error('City state too large to save');
+    // Both JSON.stringify and compression happen in the worker
+    const compressed = await serializeAndCompressAsync(state);
+    
+    if (compressed.length > 5 * 1024 * 1024) {
+      console.error('Compressed city state too large to save');
       return;
     }
-    localStorage.setItem(SAVED_CITY_PREFIX + cityId, serialized);
+    
+    localStorage.setItem(SAVED_CITY_PREFIX + cityId, compressed);
   } catch (e) {
     if (e instanceof DOMException && (e.code === 22 || e.code === 1014)) {
       console.error('localStorage quota exceeded');
@@ -483,13 +592,34 @@ function saveCityState(cityId: string, state: GameState): void {
   }
 }
 
-// Load a saved city state from localStorage
+// Wrapper for compatibility
+function saveCityState(cityId: string, state: GameState): void {
+  saveCityStateAsync(cityId, state);
+}
+
+// Load a saved city state from localStorage (supports compressed and legacy formats)
 function loadCityState(cityId: string): GameState | null {
   if (typeof window === 'undefined') return null;
   try {
     const saved = localStorage.getItem(SAVED_CITY_PREFIX + cityId);
     if (saved) {
-      const parsed = JSON.parse(saved);
+      // Try to decompress first (new format)
+      // lz-string can return garbage when given invalid input, so check for valid JSON start
+      let jsonString = decompressFromUTF16(saved);
+      
+      // Check if decompression returned valid-looking JSON
+      if (!jsonString || !jsonString.startsWith('{')) {
+        // Check if saved string itself is JSON (legacy uncompressed format)
+        if (saved.startsWith('{')) {
+          jsonString = saved;
+        } else {
+          // Data is corrupted
+          console.error('Corrupted city save data for:', cityId);
+          return null;
+        }
+      }
+      
+      const parsed = JSON.parse(jsonString);
       if (parsed && parsed.grid && parsed.gridSize && parsed.stats) {
         return parsed as GameState;
       }
@@ -583,32 +713,33 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     stateChangedRef.current = true;
   }, [state]);
   
+  // PERF: Track if a save is in progress to avoid overlapping saves
+  const saveInProgressRef = useRef(false);
+  
   // Separate effect that actually performs saves on an interval
   useEffect(() => {
-    // Wait for initial load
-    const checkLoaded = setInterval(() => {
+    // Wait for initial load - just check once after a short delay
+    const checkLoadedTimeout = setTimeout(() => {
       if (!hasLoadedRef.current) {
         return;
       }
-      
-      // Clear the check interval
-      clearInterval(checkLoaded);
       
       // Clear any existing save interval
       if (saveIntervalRef.current) {
         clearInterval(saveIntervalRef.current);
       }
       
-      // Set up interval to save every 3 seconds if there's pending state
+      // Set up interval to save every 5 seconds
+      // PERF: Save operation is broken into chunks internally to avoid blocking
       saveIntervalRef.current = setInterval(() => {
         // Don't save if we just loaded
         if (skipNextSaveRef.current) {
+          skipNextSaveRef.current = false;
           return;
         }
         
-        // Don't save too frequently
-        const timeSinceLastSave = Date.now() - lastSaveTimeRef.current;
-        if (timeSinceLastSave < 2000) {
+        // Don't save if a save is already in progress
+        if (saveInProgressRef.current) {
           return;
         }
         
@@ -617,53 +748,69 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         
-        // PERF: Only do the deep copy when we actually save (not on every state change)
-        // Use structuredClone when available (faster than JSON parse/stringify)
-        const stateToSave = typeof structuredClone === 'function' 
-          ? structuredClone(latestStateRef.current)
-          : JSON.parse(JSON.stringify(latestStateRef.current));
+        // Mark save as in progress
+        saveInProgressRef.current = true;
         stateChangedRef.current = false;
-        
-        // Perform the save
         setIsSaving(true);
-        try {
-          saveGameState(stateToSave);
+        
+        // PERF: No need for structuredClone here - the worker handles everything
+        // postMessage internally clones the data when sending to the worker
+        saveGameState(latestStateRef.current, () => {
           lastSaveTimeRef.current = Date.now();
           setHasExistingGame(true);
-        } finally {
           setIsSaving(false);
-        }
-      }, 3000); // Check every 3 seconds
-    }, 100);
+          saveInProgressRef.current = false;
+        });
+      }, 5000); // Save every 5 seconds
+    }, 200); // Wait 200ms for initial load
     
     return () => {
-      clearInterval(checkLoaded);
+      clearTimeout(checkLoadedTimeout);
       if (saveIntervalRef.current) {
         clearInterval(saveIntervalRef.current);
       }
     };
   }, []);
 
-  // Simulation loop - with mobile performance optimization
+  // PERF: Track tick count to only sync UI-visible changes to React periodically
+  const tickCountRef = useRef(0);
+  const lastUiSyncRef = useRef(0);
+  
+  // Simulation loop - PERF: Runs simulation but throttles React updates aggressively
+  // Grid updates go to ref (canvas reads from ref), React only gets UI updates
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
 
     if (state.speed > 0) {
       // Check if running on mobile for performance optimization
       const isMobileDevice = typeof window !== 'undefined' && (
-        window.innerWidth < 768 || 
+        window.innerWidth < 768 ||
         /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
       );
-      
-      // Slower tick intervals on mobile to reduce CPU load
-      // Desktop: 500ms, 220ms, 80ms for speeds 1, 2, 3 (3x increased from 50ms for large city perf)
-      // Mobile: 750ms, 400ms, 150ms for speeds 1, 2, 3 (50% slower)
+
+      // PERF: Balanced tick intervals
+      // Desktop: 500ms, 300ms, 200ms for speeds 1, 2, 3
+      // Mobile: 750ms, 450ms, 300ms for speeds 1, 2, 3
       const interval = isMobileDevice
-        ? (state.speed === 1 ? 750 : state.speed === 2 ? 400 : 150)
-        : (state.speed === 1 ? 500 : state.speed === 2 ? 220 : 80);
-        
+        ? (state.speed === 1 ? 750 : state.speed === 2 ? 450 : 300)
+        : (state.speed === 1 ? 500 : state.speed === 2 ? 300 : 200);
+
       timer = setInterval(() => {
-        setState((prev) => simulateTick(prev));
+        tickCountRef.current++;
+        const now = performance.now();
+        
+        // PERF: Run simulation and update ref immediately (for canvas)
+        const newState = simulateTick(latestStateRef.current);
+        latestStateRef.current = newState;
+        stateChangedRef.current = true;
+        
+        // PERF: Only sync to React every 500ms to avoid expensive reconciliation
+        // Canvas reads from latestStateRef so it sees updates immediately
+        // React state is only needed for UI elements (stats, budget display)
+        if (now - lastUiSyncRef.current >= 500) {
+          lastUiSyncRef.current = now;
+          setState(newState);
+        }
       }, interval);
     }
 
@@ -1043,6 +1190,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         return grid;
       };
       
+      // Create new boolean grids with expanded size (all initialized to false)
+      const createBoolGrid = (): boolean[][] => {
+        const grid: boolean[][] = [];
+        for (let y = 0; y < newSize; y++) {
+          grid.push(new Array(newSize).fill(false));
+        }
+        return grid;
+      };
+      
       // Copy old service values to new positions (offset by 15)
       const expandServiceGrid = (oldGrid: number[][]): number[][] => {
         const newServiceGrid = createServiceGrid();
@@ -1064,19 +1220,38 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         return newServiceGrid;
       };
       
+      // Copy old boolean grid values to new positions (offset by 15)
+      const expandBoolGrid = (oldGrid: boolean[][]): boolean[][] => {
+        const newBoolGrid = createBoolGrid();
+        const offset = 15;
+        if (oldGrid && Array.isArray(oldGrid)) {
+          for (let y = 0; y < prev.gridSize; y++) {
+            const row = oldGrid[y];
+            if (row && Array.isArray(row)) {
+              for (let x = 0; x < prev.gridSize; x++) {
+                const value = row[x];
+                if (typeof value === 'boolean') {
+                  newBoolGrid[y + offset][x + offset] = value;
+                }
+              }
+            }
+          }
+        }
+        return newBoolGrid;
+      };
+      
       return {
         ...prev,
         grid: newGrid,
         gridSize: newSize,
         // Expand all service grids
         services: {
-          power: expandServiceGrid(prev.services.power),
-          water: expandServiceGrid(prev.services.water),
+          power: expandBoolGrid(prev.services.power),
+          water: expandBoolGrid(prev.services.water),
           fire: expandServiceGrid(prev.services.fire),
           police: expandServiceGrid(prev.services.police),
           health: expandServiceGrid(prev.services.health),
           education: expandServiceGrid(prev.services.education),
-          subway: expandServiceGrid(prev.services.subway),
         },
         // Update bounds
         bounds: {
@@ -1114,6 +1289,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         return grid;
       };
       
+      // Create new boolean grids with shrunken size
+      const createBoolGrid = (): boolean[][] => {
+        const grid: boolean[][] = [];
+        for (let y = 0; y < newSize; y++) {
+          grid.push(new Array(newSize).fill(false));
+        }
+        return grid;
+      };
+      
       // Copy old service values from interior positions (offset by 15)
       const shrinkServiceGrid = (oldGrid: number[][]): number[][] => {
         const newServiceGrid = createServiceGrid();
@@ -1135,19 +1319,38 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         return newServiceGrid;
       };
       
+      // Copy old boolean grid values from interior positions (offset by 15)
+      const shrinkBoolGrid = (oldGrid: boolean[][]): boolean[][] => {
+        const newBoolGrid = createBoolGrid();
+        const offset = 15;
+        if (oldGrid && Array.isArray(oldGrid)) {
+          for (let y = 0; y < newSize; y++) {
+            const oldRow = oldGrid[y + offset];
+            if (oldRow && Array.isArray(oldRow)) {
+              for (let x = 0; x < newSize; x++) {
+                const value = oldRow[x + offset];
+                if (typeof value === 'boolean') {
+                  newBoolGrid[y][x] = value;
+                }
+              }
+            }
+          }
+        }
+        return newBoolGrid;
+      };
+      
       return {
         ...prev,
         grid: newGrid,
         gridSize: newSize,
         // Shrink all service grids
         services: {
-          power: shrinkServiceGrid(prev.services.power),
-          water: shrinkServiceGrid(prev.services.water),
+          power: shrinkBoolGrid(prev.services.power),
+          water: shrinkBoolGrid(prev.services.water),
           fire: shrinkServiceGrid(prev.services.fire),
           police: shrinkServiceGrid(prev.services.police),
           health: shrinkServiceGrid(prev.services.health),
           education: shrinkServiceGrid(prev.services.education),
-          subway: shrinkServiceGrid(prev.services.subway),
         },
         // Update bounds
         bounds: {
@@ -1375,6 +1578,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const value: GameContextValue = {
     state,
+    latestStateRef,
     setTool,
     setSpeed,
     setTaxRate,

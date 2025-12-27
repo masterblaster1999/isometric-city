@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { msg, useMessages } from 'gt-next';
 import { useGame } from '@/context/GameContext';
 import { Tool, TOOL_INFO } from '@/types/game';
 import { Button } from '@/components/ui/button';
@@ -193,6 +194,37 @@ const QuickToolIcons: Partial<Record<Tool, React.ReactNode>> = {
   ),
 };
 
+// Category labels for translation
+const CATEGORY_LABELS: Record<string, unknown> = {
+  'TOOLS': msg('Tools'),
+  'ZONES': msg('Zones'),
+  'ZONING': msg('Zoning'),
+  'UTILITIES': msg('Utilities'),
+  'SERVICES': msg('Services'),
+  'PARKS': msg('Parks'),
+  'SPORTS': msg('Sports'),
+  'WATERFRONT': msg('Waterfront'),
+  'COMMUNITY': msg('Community'),
+  'SPECIAL': msg('Special'),
+};
+
+// UI labels for translation
+const UI_LABELS = {
+  viewOverlays: msg('View Overlays'),
+  none: msg('None'),
+  power: msg('Power'),
+  water: msg('Water'),
+  fire: msg('Fire'),
+  police: msg('Police'),
+  health: msg('Health'),
+  education: msg('Education'),
+  subway: msg('Subway'),
+  budget: msg('Budget'),
+  statistics: msg('Statistics'),
+  advisors: msg('Advisors'),
+  settings: msg('Settings'),
+};
+
 const toolCategories = {
   'TOOLS': ['select', 'bulldoze', 'road', 'rail', 'subway'] as Tool[],
   'ZONES': ['zone_residential', 'zone_commercial', 'zone_industrial'] as Tool[],
@@ -219,6 +251,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
   const { selectedTool, stats } = state;
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const m = useMessages();
 
   const handleCategoryClick = (category: string) => {
     if (expandedCategory === category) {
@@ -250,7 +283,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
           {selectedTool && TOOL_INFO[selectedTool] && (
             <div className="flex items-center justify-between px-4 py-1.5 border-b border-sidebar-border/50 bg-secondary/30 text-xs">
               <span className="text-foreground font-medium">
-                {TOOL_INFO[selectedTool].name}
+                {m(TOOL_INFO[selectedTool].name)}
               </span>
               {TOOL_INFO[selectedTool].cost > 0 && (
                 <span className={`font-mono ${stats.money >= TOOL_INFO[selectedTool].cost ? 'text-green-400' : 'text-red-400'}`}>
@@ -357,7 +390,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
             {/* City Management section at top */}
             <div className="p-3 border-b border-border flex-shrink-0">
               <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-                City Management
+                {m(msg('City Management'))}
               </div>
               <div className="grid grid-cols-4 gap-2">
                 <Button
@@ -366,7 +399,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                   className="h-10 w-full text-xs"
                   onClick={() => { onOpenPanel('budget'); setShowMenu(false); }}
                 >
-                  Budget
+                  {m(UI_LABELS.budget)}
                 </Button>
                 <Button
                   variant="ghost"
@@ -374,7 +407,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                   className="h-10 w-full text-xs"
                   onClick={() => { onOpenPanel('statistics'); setShowMenu(false); }}
                 >
-                  Stats
+                  {m(UI_LABELS.statistics)}
                 </Button>
                 <Button
                   variant="ghost"
@@ -382,7 +415,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                   className="h-10 w-full text-xs"
                   onClick={() => { onOpenPanel('advisors'); setShowMenu(false); }}
                 >
-                  Advisors
+                  {m(UI_LABELS.advisors)}
                 </Button>
                 <Button
                   variant="ghost"
@@ -390,7 +423,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                   className="h-10 w-full text-xs"
                   onClick={() => { onOpenPanel('settings'); setShowMenu(false); }}
                 >
-                  Settings
+                  {m(UI_LABELS.settings)}
                 </Button>
               </div>
             </div>
@@ -399,7 +432,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
             {setOverlayMode && (
               <div className="p-3 border-b border-border flex-shrink-0">
                 <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
-                  View Overlays
+                  {m(UI_LABELS.viewOverlays)}
                 </div>
                 <div className="grid grid-cols-4 gap-2">
                   <Button
@@ -408,7 +441,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                     className="h-10 w-full text-xs"
                     onClick={() => setOverlayMode('none')}
                   >
-                    None
+                    {m(UI_LABELS.none)}
                   </Button>
                   <Button
                     variant={overlayMode === 'power' ? 'default' : 'ghost'}
@@ -416,7 +449,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                     className={`h-10 w-full text-xs ${overlayMode === 'power' ? 'bg-amber-500 hover:bg-amber-600' : ''}`}
                     onClick={() => setOverlayMode('power')}
                   >
-                    Power
+                    {m(UI_LABELS.power)}
                   </Button>
                   <Button
                     variant={overlayMode === 'water' ? 'default' : 'ghost'}
@@ -424,7 +457,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                     className={`h-10 w-full text-xs ${overlayMode === 'water' ? 'bg-blue-500 hover:bg-blue-600' : ''}`}
                     onClick={() => setOverlayMode('water')}
                   >
-                    Water
+                    {m(UI_LABELS.water)}
                   </Button>
                   <Button
                     variant={overlayMode === 'fire' ? 'default' : 'ghost'}
@@ -432,7 +465,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                     className={`h-10 w-full text-xs ${overlayMode === 'fire' ? 'bg-red-500 hover:bg-red-600' : ''}`}
                     onClick={() => setOverlayMode('fire')}
                   >
-                    Fire
+                    {m(UI_LABELS.fire)}
                   </Button>
                   <Button
                     variant={overlayMode === 'police' ? 'default' : 'ghost'}
@@ -440,7 +473,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                     className={`h-10 w-full text-xs ${overlayMode === 'police' ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
                     onClick={() => setOverlayMode('police')}
                   >
-                    Police
+                    {m(UI_LABELS.police)}
                   </Button>
                   <Button
                     variant={overlayMode === 'health' ? 'default' : 'ghost'}
@@ -448,7 +481,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                     className={`h-10 w-full text-xs ${overlayMode === 'health' ? 'bg-green-500 hover:bg-green-600' : ''}`}
                     onClick={() => setOverlayMode('health')}
                   >
-                    Health
+                    {m(UI_LABELS.health)}
                   </Button>
                   <Button
                     variant={overlayMode === 'education' ? 'default' : 'ghost'}
@@ -456,7 +489,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                     className={`h-10 w-full text-xs ${overlayMode === 'education' ? 'bg-purple-500 hover:bg-purple-600' : ''}`}
                     onClick={() => setOverlayMode('education')}
                   >
-                    Education
+                    {m(UI_LABELS.education)}
                   </Button>
                   <Button
                     variant={overlayMode === 'subway' ? 'default' : 'ghost'}
@@ -464,7 +497,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                     className={`h-10 w-full text-xs ${overlayMode === 'subway' ? 'bg-yellow-500 hover:bg-yellow-600' : ''}`}
                     onClick={() => setOverlayMode('subway')}
                   >
-                    Subway
+                    {m(UI_LABELS.subway)}
                   </Button>
                 </div>
               </div>
@@ -480,7 +513,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                       className="w-full justify-start gap-3 h-12"
                       onClick={() => handleCategoryClick(category)}
                     >
-                      <span className="flex-1 text-left font-medium">{category}</span>
+                      <span className="flex-1 text-left font-medium">{m((CATEGORY_LABELS[category] || category) as Parameters<typeof m>[0])}</span>
                       <svg
                         className={`w-4 h-4 transition-transform ${expandedCategory === category ? 'rotate-180' : ''}`}
                         viewBox="0 0 24 24"
@@ -508,7 +541,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                               disabled={!canAfford && info.cost > 0}
                               onClick={() => handleToolSelect(tool, true)}
                             >
-                              <span className="flex-1 text-left">{info.name}</span>
+                              <span className="flex-1 text-left">{m(info.name)}</span>
                               {info.cost > 0 && (
                                 <span className={`text-xs font-mono ${canAfford ? 'text-green-400' : 'text-red-400'}`}>
                                   ${info.cost}

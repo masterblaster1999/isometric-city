@@ -2230,6 +2230,17 @@ export function simulateTick(state: GameState): GameState {
   const newStats = calculateStats(newGrid, size, newBudget, state.taxRate, newEffectiveTaxRate, services);
   newStats.money = state.stats.money;
 
+  // Smooth demand to prevent flickering in large cities
+  // Rate of change: 12% of difference per tick, so changes stabilize in ~20-30 ticks (~1 game day)
+  // This is faster than tax rate smoothing (3%) to stay responsive, but slow enough to eliminate flicker
+  const prevDemand = state.stats.demand;
+  if (prevDemand) {
+    const smoothingFactor = 0.12;
+    newStats.demand.residential = prevDemand.residential + (newStats.demand.residential - prevDemand.residential) * smoothingFactor;
+    newStats.demand.commercial = prevDemand.commercial + (newStats.demand.commercial - prevDemand.commercial) * smoothingFactor;
+    newStats.demand.industrial = prevDemand.industrial + (newStats.demand.industrial - prevDemand.industrial) * smoothingFactor;
+  }
+
   // Update money on month change
   let newYear = state.year;
   let newMonth = state.month;
